@@ -34,6 +34,7 @@ FixStyle(SMD_TLSPH_NEIGHBORS,FixSMD_TLSPH_ReferenceConfiguration);
 #define LMP_FIX_SMD_TLSPH_REFERENCE_H
 
 #include "fix.h"
+#include <Eigen/Eigen>
 
 namespace LAMMPS_NS {
 
@@ -73,6 +74,8 @@ class FixSMD_TLSPH_ReferenceConfiguration : public Fix {
   tagint **partner;    // global atom IDs for the partners
   float **wfd_list, **wf_list, **energy_per_bond;
   float **degradation_ij;    // per-pair interaction degradation status
+  Eigen::Vector3d ** partnerx0;  // x0 vector of all partners
+  double ** partnervol;          // volume of all partners
 
   class Pair *pair;
 };

@@ -70,7 +70,13 @@ class PairTlsph : public Pair {
                              const Eigen::Matrix3d &d_dev, Eigen::Matrix3d &sigmaFinal_dev,
                              Eigen::Matrix3d &sigma_dev_rate, double &plastic_strain_increment);
   void ComputeDamage(const int i, const Eigen::Matrix3d &strain, const Eigen::Matrix3d &sigmaFinal,
-                     Eigen::Matrix3d &sigma_damaged);
+                     Eigen::Matrix3d &sigma_damaged, double plastic_strain_increment);
+  void UpdateDegradation();
+  void AdjustStressForZeroForceBC(const Eigen::Matrix3d sigma, const Eigen::Vector3d sU, Eigen::Matrix3d &sigmaBC);
+  Eigen::Vector3d ComputeFstress(const int i, const int j, const int jj, const double surfaceNormalNormi, 
+                                 const Eigen::Vector3d dx0, const double r0, const Eigen::Vector3d g, 
+                                 const Eigen::Matrix3d sigmaBC_i, const double scale, const double strain1d = 1.0);
+
 
  protected:
   void allocate();
@@ -85,13 +91,15 @@ class PairTlsph : public Pair {
   /*
          * per atom arrays
          */
-  Eigen::Matrix3d *K, *PK1, *Fdot, *Fincr;
+  Eigen::Matrix3d *K, *Kundeg, *PK1, *Fdot, *Fincr;
   Eigen::Matrix3d *R;    // rotation matrix
   Eigen::Matrix3d *FincrInv;
   Eigen::Matrix3d *D, *W;    // strain rate and spin tensor
   Eigen::Vector3d *smoothVelDifference;
+  Eigen::Vector3d *surfaceNormal; // Vector normal to the boundary pointing outwards
   Eigen::Matrix3d *CauchyStress;
   double *detF, *particle_dt;
+	double *vij_max;
   double *hourglass_error;
   int *numNeighsRefConfig;
 
