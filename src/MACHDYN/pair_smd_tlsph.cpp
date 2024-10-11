@@ -56,15 +56,16 @@ static constexpr double DETF_MIN = 0.002; // maximum compression deformation all
 static constexpr double DETF_MAX = 200.0; // maximum tension deformation allowed
 
 
-static double CalculateScale(const float degradation, double r, double r0) {
-  //return 1.0 - degradation;
-  double strain1d = (r - r0) / r0;
-  
-  if (strain1d > 0.0) {
-    return 1 - degradation;
-  } else {
+static double CalculateScale(const float degradation) {
+  double start = 0.9;
+  if (degradation <= start) {
     return 1.0;
   }
+  if (degradation >= 1.0) {
+    return 0.0;
+  }
+  
+  return 0.5 + 0.5 * cos( M_PI * (degradation - start) / (1.0 - start) );
 }
 
 static Matrix3d CreateOrthonormalBasisFromOneVector(Vector3d sU) {
@@ -355,7 +356,7 @@ void PairTlsph::PreCompute() {
 				vij_max[i] = MAX(vij_max[i], dv.norm());
 
         // scale the interaction according to the damage variable
-        scale = 1.0 - degradation_ij[i][jj];
+				scale = CalculateScale(degradation_ij[i][jj]);
         wf = wf_list[i][jj] * scale;
         wfd = wfd_list[i][jj] * scale;
         g = (wfd / r0) * dx0;
@@ -745,7 +746,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
 
       // scale the interaction according to the damage variable
 			//scale = CalculateScale(degradation_ij[i][jj], r, r0);
-      scale = 1.0 - degradation_ij[i][jj];
+			scale =CalculateScale(degradation_ij[i][jj]);
 			strain1d = ( r - r0 ) / r0;
 			wf = wf_list[i][jj];// * scale;
 			wfd = wfd_list[i][jj];// * scale;
@@ -970,9 +971,6 @@ void PairTlsph::AssembleStress() {
         /*
          *  assemble total stress from pressure and deviatoric stress
          */
-				if (pFinal > 0.0) {
-				  pFinal *= (1 - damage[i]); // Apply damage to the non-deviatoric part of the stress. The deviatoric part already includes damage.
-				}
         sigmaFinal = pFinal * eye + sigmaFinal_dev; // this is the stress that is kept
 
         if (JAUMANN) {
@@ -2077,7 +2075,7 @@ void PairTlsph::ComputePressure(const int i, const double rho, const double mass
   case EOS_SHOCK:
 //  rho,  rho0,  e,  e0,  c0,  S,  Gamma,  pInitial,  dt,  &pFinal,  &p_rate);
     ShockEOS(rho, Lookup[REFERENCE_DENSITY][itype], mass_specific_energy, 0.0, Lookup[EOS_SHOCK_C0][itype],
-             Lookup[EOS_SHOCK_S][itype], Lookup[EOS_SHOCK_GAMMA][itype], pInitial, dt, pFinal, p_rate);
+             Lookup[EOS_SHOCK_S][itype], Lookup[EOS_SHOCK_GAMMA][itype], pInitial, dt, pFinal, p_rate, damage[i]);
     break;
   case EOS_POLYNOMIAL:
     polynomialEOS(rho, Lookup[REFERENCE_DENSITY][itype], vol_specific_energy, Lookup[EOS_POLYNOMIAL_C0][itype],
