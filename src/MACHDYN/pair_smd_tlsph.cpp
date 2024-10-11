@@ -55,6 +55,9 @@ static constexpr bool JAUMANN = false;
 static constexpr double DETF_MIN = 0.002; // maximum compression deformation allow
 static constexpr double DETF_MAX = 200.0; // maximum tension deformation allowed
 
+#ifndef M_PI
+#define M_PI 3.141592653589793238462643383279502884197169399375105820974944
+#endif
 
 static double CalculateScale(const float degradation) {
   double start = 0.9;
