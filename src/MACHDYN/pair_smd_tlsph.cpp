@@ -357,12 +357,12 @@ void PairTlsph::PreCompute() {
 				scale = CalculateScale(degradation_ij[i][jj]);
         wf = wf_list[i][jj] * scale;
         wfd = wfd_list[i][jj] * scale;
-        g = (wfd / r0) * dx0;
+				g = (wfd / r0) * dx0.transpose();
 
         /* build matrices */
-        Ktmp = -g * dx0.transpose();
-        Fdottmp = -dv * g.transpose();
-        Ftmp = -(dx - dx0) * g.transpose();
+				Ktmp = -dx0 * g;
+				Fdottmp = -dv * g;
+				Ftmp = -(dx - dx0) * g;
 
         K[i].noalias() += volj * Ktmp;
 				if (updateKundegFlag == 1) Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
@@ -410,22 +410,22 @@ void PairTlsph::PreCompute() {
 			  for (jj = 0; jj < jnum; jj++) {
 			    
 			    if (degradation_ij[i][jj] >= 1.0) 
-			      {
-				volj = partnervol[i][jj];
-				dx0 = partnerx0[i][jj] - x0i;
+			    {
+				    volj = partnervol[i][jj];
+				    dx0 = partnerx0[i][jj] - x0i;
 								
-				if (periodic)
-				  domain->minimum_image(dx0(0), dx0(1), dx0(2));
+				    if (periodic)
+				      domain->minimum_image(dx0(0), dx0(1), dx0(2));
 
-				if (surfaceNormal[i].dot(dx0) > -0.5*pow(volj, 1.0/3.0)) {
-				  continue;
-				}
+				    if (surfaceNormal[i].dot(dx0) > -0.5*pow(volj, 1.0/3.0)) {
+				      continue;
+				    }
 
-				dx0mirror = dx0 - 2 * (dx0.dot(surfaceNormal[i])) * surfaceNormal[i];
-				r0 = dx0.norm();
-				Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0mirror * dx0mirror.transpose();
-				continue;
-			      }
+				    dx0mirror = dx0 - 2 * (dx0.dot(surfaceNormal[i])) * surfaceNormal[i];
+				    r0 = dx0.norm();
+				    Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0mirror * dx0mirror.transpose();
+				    continue;
+			    }
 			    j = atom->map(partner[i][jj]);
 			    if (j < 0) { //			// check if lost a partner without first breaking bond
 			      error->all(FLERR, "Bond broken not detected during PreCompute - 1!");
