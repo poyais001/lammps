@@ -215,7 +215,7 @@ void PairTlsph::PreCompute() {
   float **degradation_ij = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->degradation_ij;
 	Vector3d **partnerx0 = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->partnerx0;
 	double **partnervol = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->partnervol;
-  double r, r0, r0Sq, wf, wfd, h, irad, voli, volj, scale, shepardWeight, strain1d;
+  double r, r0, r0Sq, wf, wfd, h, irad, voli, volj, scale, shepardWeight;
   Vector3d dx, dx0, dx0mirror, dv, g;
   Matrix3d Ktmp, Ftmp, Fdottmp, L, U, eye;
   Vector3d vi, vj, vinti, vintj, xi, xj, x0i, x0j, dvint;
@@ -335,13 +335,6 @@ void PairTlsph::PreCompute() {
           vintj(idim) = vint[j][idim];
         }
 
-				//Check if partnerx0 is equal to x0j:
-				if((partnerx0[i][jj][0] != x0j[0]) || (partnerx0[i][jj][1] != x0j[1]) || (partnerx0[i][jj][2] != x0j[2]) ) {
-          printf("x0 does not correspond to partnerx0 for j=%d\n", tag[j]);
-          std::cout << "Here is x0" << std::endl << x0j << std::endl;
-          std::cout << "Here is partnerx0" << std::endl << partnerx0[i][jj] << std::endl;
-				}
-				
         dx0 = x0j - x0i;
         dx = xj - xi;
 				r = dx.norm(); // current distance
@@ -378,22 +371,10 @@ void PairTlsph::PreCompute() {
         shepardWeight += volj * wf;
         smoothVelDifference[i].noalias() += volj * wf * dvint;
 				
-				//Vector3d dx0sq;
-				//dx0sq[0] = dx0[0]*abs(dx0[0]);
-				//dx0sq[1] = dx0[1]*abs(dx0[1]);
-				//dx0sq[2] = dx0[2]*abs(dx0[2]);
 				if (updateSurfaceNormal == 1) surfaceNormal[i].noalias() += volj * wfd_list[i][jj] * dx0;
 				
 				//gradAbsX += volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose().cwiseAbs();
         numNeighsRefConfig[i]++;
-				//if (tag[i] == 1) {
-				//  cout << "Here is dx0:" << endl << dx0 << endl;
-				//  Matrix3d Tmp;
-				//  Tmp = volj * Ktmp;
-				//  pseudo_inverse_SVD(Tmp);
-				//  cout << "Here is surfaceNormalij:" << endl << volj * wfd / r0 * dx0sq << endl;
-				//  cout << "Here is Kij-1:" << endl << Tmp << endl;
-				//}
       } // end loop over j
 
       // normalize average velocity field around an integration point
@@ -414,11 +395,7 @@ void PairTlsph::PreCompute() {
 			}
       Fdot[i] *= K[i];
       Fincr[i] *= K[i];
-      Fincr[i] += eye;
-			//gradAbsX = gradAbsX * KundegINV;
-			//surfaceNormal[i][0] = gradAbsX(0, 0);
-			//surfaceNormal[i][1] = gradAbsX(1, 1);
-			//surfaceNormal[i][2] = gradAbsX(2, 2);
+			Fincr[i].noalias() += eye;
 			
 			if (updateKundegFlag == 1) {
 			// Recalculate Kundeg to include mirror particles:
@@ -660,7 +637,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
   int i, j, jj, jnum, itype, idim;
   double r, hg_mag, wf, wfd, h, r0, r0Sq, voli, volj;
   double delVdotDelR, visc_magnitude, deltaE, mu_ij, hg_err, gamma_dot_dx, delta, scale;
-  double strain1d, strain1d_max, softening_strain, shepardWeight;
+	double softening_strain, shepardWeight;
 	double surfaceNormalNormi;
   Vector3d fi, fj, dx0, dx, dv, f_stress, f_hg, dxp_i, dxp_j, gamma, g, gamma_i, gamma_j, x0i, x0j;
   Vector3d xi, xj, vi, vj, f_visc, sumForces, f_spring;
@@ -759,8 +736,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
 
       // scale the interaction according to the damage variable
 			//scale = CalculateScale(degradation_ij[i][jj], r, r0);
-			scale =CalculateScale(degradation_ij[i][jj]);
-			strain1d = ( r - r0 ) / r0;
+			scale = CalculateScale(degradation_ij[i][jj]);
 			wf = wf_list[i][jj];// * scale;
 			wfd = wfd_list[i][jj];// * scale;
 
@@ -2262,9 +2238,11 @@ void PairTlsph::UpdateDegradation() {
 		h = 2.0 * radius[i];
 		r = 0.0;
 
-		for (idim = 0; idim < 3; idim++) {
-			x0i(idim) = x0[i][idim];
-			xi(idim) = x[i][idim];
+		if (failureModel[itype].failure_max_pairwise_strain) {
+		  for (idim = 0; idim < 3; idim++) {
+		    x0i(idim) = x0[i][idim];
+		    xi(idim) = x[i][idim];
+		  }
 		}
 
 		int numNeighbors = 0;
@@ -2291,45 +2269,45 @@ void PairTlsph::UpdateDegradation() {
 				error->all(FLERR, str);
 			}
 
-			for (idim = 0; idim < 3; idim++) {
-				x0j(idim) = x0[j][idim];
-				xj(idim) = x[j][idim];
-			}
-
-			if (periodic)
-				domain->minimum_image(dx0(0), dx0(1), dx0(2));
-
-			// check that distance between i and j (in the reference config) is less than cutoff
-			dx0 = x0j - x0i;
-			r0Sq = dx0.squaredNorm();
-			h = radius[i] + radius[j];
-			r0 = sqrt(r0Sq);
-
-			// distance vectors in current and reference configuration, velocity difference
-			dx = xj - xi;
-			r = dx.norm(); // current distance
-
 			if (failureModel[itype].failure_max_pairwise_strain) {
+			  for (idim = 0; idim < 3; idim++) {
+			    x0j(idim) = x0[j][idim];
+			    xj(idim) = x[j][idim];
+			  }
 
-				strain1d = (r - r0) / r0;
-				strain1d_max = Lookup[FAILURE_MAX_PAIRWISE_STRAIN_THRESHOLD][itype];
-				softening_strain = 2.0 * strain1d_max;
+			  if (periodic)
+			    domain->minimum_image(dx0(0), dx0(1), dx0(2));
 
-				if (strain1d > strain1d_max) {
-				  degradation_ij[i][jj] = std::max(degradation_ij[i][jj], float((strain1d - strain1d_max) / softening_strain));
-				  if (degradation_ij[i][jj] >= 0.99) {
-				    printf("Link between %d and %d destroyed.\n", tag[i], partner[i][jj]);
-				    std::cout << "Here is dx0:" << std::endl << dx0 << std::endl;
-				    degradation_ij[i][jj] = 0.99;
-				  }
-				  //degradation_ij[i][jj] = (strain1d - strain1d_max) / softening_strain;
-				} else {
-				  //degradation_ij[i][jj] = 0.0;
-				}
+			  // check that distance between i and j (in the reference config) is less than cutoff
+			  dx0 = x0j - x0i;
+			  r0Sq = dx0.squaredNorm();
+			  h = radius[i] + radius[j];
+			  r0 = sqrt(r0Sq);
+
+			  // distance vectors in current and reference configuration, velocity difference
+			  dx = xj - xi;
+			  r = dx.norm(); // current distance
+
+			  strain1d = (r - r0) / r0;
+			  strain1d_max = Lookup[FAILURE_MAX_PAIRWISE_STRAIN_THRESHOLD][itype];
+			  softening_strain = 2.0 * strain1d_max;
+
+			  if (strain1d > strain1d_max) {
+			    degradation_ij[i][jj] = std::max(degradation_ij[i][jj], float((strain1d - strain1d_max) / softening_strain));
+			    if (degradation_ij[i][jj] >= 0.99) {
+			      printf("Link between %d and %d destroyed.\n", tag[i], partner[i][jj]);
+			      std::cout << "Here is dx0:" << std::endl << dx0 << std::endl;
+			      degradation_ij[i][jj] = 0.99;
+			    }
+			    //degradation_ij[i][jj] = (strain1d - strain1d_max) / softening_strain;
+			  } else {
+			    //degradation_ij[i][jj] = 0.0;
+			  }
 			}
 
 			if (failureModel[itype].failure_energy_release_rate) {
 			  
+				h = radius[i] + radius[j];
 				double Vic = (2.0 / 3.0) * h * h * h * h; // interaction volume for 2d plane strain
 				double critical_energy_per_bond = Lookup[CRITICAL_ENERGY_RELEASE_RATE][itype] / (2.0 * Vic);
 
