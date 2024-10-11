@@ -138,6 +138,8 @@ PairTlsph::PairTlsph(LAMMPS *lmp) :
 	vij_max = nullptr;
 
   updateFlag = 0;
+	updateKundegFlag = 1;
+	updateSurfaceNormal = 1;
   first = true;
   dtCFL = 0.0; // initialize dtCFL so it is set to safe value if extracted on zero-th timestep
 
@@ -247,12 +249,12 @@ void PairTlsph::PreCompute() {
     if (setflag[itype][itype] == 1) {
 
       K[i].setZero();
-			Kundeg[i].setZero();
+			if (updateKundegFlag == 1) Kundeg[i].setZero();
       Fincr[i].setZero();
       Fdot[i].setZero();
       numNeighsRefConfig[i] = 0;
       smoothVelDifference[i].setZero();
-			surfaceNormal[i].setZero();
+			if (updateSurfaceNormal == 1) surfaceNormal[i].setZero();
       hourglass_error[i] = 0.0;
 
       if (mol[i] < 0) { // valid SPH particle have mol > 0
@@ -289,8 +291,8 @@ void PairTlsph::PreCompute() {
             domain->minimum_image(dx0(0), dx0(1), dx0(2));
           
           r0 = dx0.norm();
-          Kundeg[i] -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
-          surfaceNormal[i] += volj * wfd_list[i][jj] * dx0;
+				    if (updateKundegFlag == 1) Kundeg[i] -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
+				    if (updateSurfaceNormal == 1) surfaceNormal[i] += volj * wfd_list[i][jj] * dx0;
           //printf("Link between %d and %d destroyed!\n", tag[i], partner[i][jj]);
           continue;
         }
@@ -304,8 +306,8 @@ void PairTlsph::PreCompute() {
 				    domain->minimum_image(dx0(0), dx0(1), dx0(2));
 				  
 				  r0 = dx0.norm();
-				  Kundeg[i] -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
-				  surfaceNormal[i] += volj * wfd_list[i][jj] * dx0;
+				  if (updateKundegFlag == 1) Kundeg[i] -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
+          if (updateSurfaceNormal == 1) surfaceNormal[i] += volj * wfd_list[i][jj] * dx0;
 				  degradation_ij[i][jj] = 1.0;
 				  continue;
         }
@@ -370,7 +372,7 @@ void PairTlsph::PreCompute() {
         Ftmp = -(dx - dx0) * g.transpose();
 
         K[i] += volj * Ktmp;
-				Kundeg[i] -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
+				if (updateKundegFlag == 1) Kundeg[i] -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
         Fdot[i] += volj * Fdottmp;
         Fincr[i] += volj * Ftmp;
         shepardWeight += volj * wf;
@@ -380,7 +382,7 @@ void PairTlsph::PreCompute() {
 				//dx0sq[0] = dx0[0]*abs(dx0[0]);
 				//dx0sq[1] = dx0[1]*abs(dx0[1]);
 				//dx0sq[2] = dx0[2]*abs(dx0[2]);
-				surfaceNormal[i] += volj * wfd_list[i][jj] * dx0; 
+				if (updateSurfaceNormal == 1) surfaceNormal[i] += volj * wfd_list[i][jj] * dx0;
 				
 				//gradAbsX += volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose().cwiseAbs();
         numNeighsRefConfig[i]++;
@@ -402,18 +404,23 @@ void PairTlsph::PreCompute() {
       }
 
       pseudo_inverse_SVD(K[i]);
-			Matrix3d KundegINV;
-			KundegINV = Kundeg[i];
-			pseudo_inverse_SVD(KundegINV);
+			if (updateKundegFlag == 1) {
+			  Matrix3d KundegINV;
+			  KundegINV = Kundeg[i];
+			  pseudo_inverse_SVD(KundegINV);
+			  surfaceNormal[i] = KundegINV * surfaceNormal[i];
+			} else {
+			  if (updateSurfaceNormal == 1) surfaceNormal[i] = Kundeg[i] * surfaceNormal[i];
+			}
       Fdot[i] *= K[i];
       Fincr[i] *= K[i];
       Fincr[i] += eye;
-			surfaceNormal[i] = KundegINV * surfaceNormal[i];
 			//gradAbsX = gradAbsX * KundegINV;
 			//surfaceNormal[i][0] = gradAbsX(0, 0);
 			//surfaceNormal[i][1] = gradAbsX(1, 1);
 			//surfaceNormal[i][2] = gradAbsX(2, 2);
 			
+			if (updateKundegFlag == 1) {
 			// Recalculate Kundeg to include mirror particles:
 			
 			surfaceNormalNormi = surfaceNormal[i].norm();
@@ -481,6 +488,7 @@ void PairTlsph::PreCompute() {
 			}
 			// END RECALCULATE Kundeg
 			pseudo_inverse_SVD(Kundeg[i]);
+      }
 
       if (JAUMANN) {
         R[i].setIdentity(); // for Jaumann stress rate, we do not need a subsequent rotation back into the reference configuration
@@ -543,8 +551,10 @@ void PairTlsph::PreCompute() {
         vint[i][1] = 0.0;
         vint[i][2] = 0.0;
       }
-    } // end loop over i
-  } // end check setflag
+		} // end check setflag 
+	} // end loop over i
+	updateKundegFlag = 0;
+	updateSurfaceNormal = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -769,8 +779,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
 			  Vector3d sV = P.col(1);
 			  Vector3d sW = P.col(2);
 			  
-			  f_stress -= voli * volj * (2* sigmaBC_i) * Kundeg[i] * (g.dot(sV)*sV + g.dot(sW)*sW);
-			  f_stress += voli * volj * (2* sigmaBC_i) * Kundeg[i] * g.dot(sU)*sU;
+			  f_stress += voli * volj * (2* sigmaBC_i) * Kundeg[i] * (g.dot(sU)*sU - (g.dot(sV)*sV + g.dot(sW)*sW));
 			}
 
 			energy_per_bond[i][jj] = f_stress.dot(dx); // THIS IS NOT THE ENERGY PER BOND, I AM USING THIS VARIABLE TO STORE THIS VALUE TEMPORARILY
