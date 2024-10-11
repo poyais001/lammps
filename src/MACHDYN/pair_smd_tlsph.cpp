@@ -357,12 +357,12 @@ void PairTlsph::PreCompute() {
         scale = CalculateScale(degradation_ij[i][jj]);
         wf = wf_list[i][jj] * scale;
         wfd = wfd_list[i][jj] * scale;
-        g = (wfd / r0) * dx0.transpose();
+        g = (wfd / r0) * dx0;
 
         /* build matrices */
-        Ktmp = -dx0 * g;
-        Fdottmp = -dv * g;
-        Ftmp = -(dx - dx0) * g;
+				Ktmp = -g * dx0.transpose();
+				Fdottmp = -dv * g.transpose();
+				Ftmp = -(dx - dx0) * g.transpose();
 
         K[i].noalias() += volj * Ktmp;
         if (updateKundegFlag == 1) Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
