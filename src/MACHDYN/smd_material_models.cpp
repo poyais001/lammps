@@ -329,12 +329,12 @@ void JohnsonCookStrength(const double G, const double cp, const double espec, co
         epdot_ratio = MAX(epdot_ratio, 1.0);
         //printf("current temperature delta is %f, TH=%f\n", deltaT, TH);
 
-	yieldStress = (A + B * pow(ep, a)) * (1.0 + C * log(epdot_ratio)); // * (1.0 - damage); // * (1.0 - pow(TH, M));
+	yieldStress = (A + B * pow(ep, a)) * (1.0 + C * log(epdot_ratio)); // * (1.0 - pow(TH, M));
 
         /*
          * deviatoric rate of unrotated stress
          */
-        dev_rate = 2.0 * G * d_dev;
+	dev_rate = 2.0 * G * (1 - damage) * d_dev;
 
         /*
          * perform a trial elastic update to the deviatoric stress
@@ -361,7 +361,7 @@ void JohnsonCookStrength(const double G, const double cp, const double espec, co
                 /*
                  * yielding has occurred
                  */
-                plastic_strain_increment = (J2 - yieldStress) / (3.0 * G);
+		plastic_strain_increment = (J2 - yieldStress) / (3.0 * G * (1 - damage));
 
                 /*
                  * new deviatoric stress:

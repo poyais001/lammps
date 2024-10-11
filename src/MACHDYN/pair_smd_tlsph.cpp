@@ -969,6 +969,9 @@ void PairTlsph::AssembleStress() {
         /*
          *  assemble total stress from pressure and deviatoric stress
          */
+				if (pFinal > 0.0) {
+				  pFinal *= (1 - damage[i]); // Apply damage to the non-deviatoric part of the stress. The deviatoric part already includes damage.
+				}
         sigmaFinal = pFinal * eye + sigmaFinal_dev; // this is the stress that is kept
 
         if (JAUMANN) {
@@ -2057,7 +2060,7 @@ void PairTlsph::ComputePressure(const int i, const double rho, const double mass
                                 const double pInitial, const double d_iso, double &pFinal, double &p_rate) {
   int *type = atom->type;
   double dt = update->dt;
-
+	double *damage = atom->damage;
   int itype;
 
   itype = type[i];
@@ -2196,16 +2199,6 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
 
 	damage[i] = MIN(damage[i], 1.0);
 	//damage[i] = MIN(damage[i], 0.99);
-
-	/*
-	 * Apply damage to integration point
-	 */
-
-	if (pressure > 0.0) { // compression: particle can carry compressive load but reduced shear
-		stress_damaged = -pressure * eye + (1.0 - damage[i]) * Deviator(stress);
-	} else { // tension: particle has reduced tensile and shear load bearing capability
-		stress_damaged = (1.0 - damage[i]) * (-pressure * eye + Deviator(stress));
-	}
 
 }
 
