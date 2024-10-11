@@ -65,7 +65,7 @@ void JohnsonCookStrength(const double G, const double cp, const double espec, co
 
 bool IsotropicMaxStrainDamage(const Eigen::Matrix3d &E, const double maxStrain);
 bool IsotropicMaxStressDamage(const Eigen::Matrix3d &E, const double maxStrain);
-double JohnsonCookDamageIncrement(const double p, const Matrix3d Sdev, const double d1, const double d2, const double d3,
+double JohnsonCookDamageIncrement(const double p, const Eigen::Matrix3d Sdev, const double d1, const double d2, const double d3,
 				  const double d4, const double epdot0, const double epdot, const double plastic_strain_increment);
 
 #endif /* SMD_MATERIAL_MODELS_H_ */
