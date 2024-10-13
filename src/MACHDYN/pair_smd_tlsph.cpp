@@ -95,17 +95,10 @@ static Matrix3d CreateOrthonormalBasisFromOneVector(Vector3d sU) {
     sV[1] = 1.0;
     sV[2] = 0.0;
   }
-
-  if (sU.dot(sV) > 1.0e-15) {
-    printf("Error: sU.sV = %f != 0\n", sU.dot(sV));
-    std::cout << "Here is sU: " << std::endl << sU << std::endl;
-    std::cout << "Here is sV: " << std::endl << sV << std::endl;
-    std::cout << "Here is sW: " << std::endl << sW << std::endl;
-  }
   
   sV /= sV.norm();
   sW = sU.cross(sV);
-  sW /= sW.norm();
+  //sW /= sW.norm(); This can be skipped since sU and sV are orthogonal and both unitary.
 
   P.col(0) = sU;
   P.col(1) = sV;
@@ -222,7 +215,7 @@ void PairTlsph::PreCompute() {
   int periodic = (domain->xperiodic || domain->yperiodic || domain->zperiodic);
   bool status;
   Matrix3d F0;
-  double surfaceNormalNormi;
+	double surfaceNormalNormi, dv_norm;
 
   dtCFL = 1.0e22;
   eye.setIdentity();
@@ -351,7 +344,8 @@ void PairTlsph::PreCompute() {
         // distance vectors in current and reference configuration, velocity difference
         dv = vj - vi;
         dvint = vintj - vinti;
-        vij_max[i] = MAX(vij_max[i], dv.norm());
+				dv_norm = dv.norm();
+				if (dv_norm > vij_max[i]) vij_max[i] = dv_norm;
 
         // scale the interaction according to the damage variable
         scale = CalculateScale(degradation_ij[i][jj]);
@@ -651,6 +645,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
   Vector3d **partnerx0 = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->partnerx0;
   double **partnervol = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->partnervol;
   Matrix3d eye, sigmaBC_i;
+	Vector3d sU, sV, sW;
   eye.setIdentity();
   sigmaBC_i.setZero();
 
@@ -691,6 +686,14 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
     surfaceNormalNormi = surfaceNormal[i].norm();
     if (surfaceNormalNormi > 0.5) {
       AdjustStressForZeroForceBC(PK1[i], surfaceNormal[i], sigmaBC_i);
+		  Matrix3d P = CreateOrthonormalBasisFromOneVector(surfaceNormal[i]);
+		  sU = P.col(0);
+		  sV = P.col(1);
+		  sW = P.col(2);
+		} else {
+		  sU.setZero();
+		  sV.setZero();
+		  sW.setZero();
     }
 
     for (jj = 0; jj < jnum; jj++) {
@@ -749,11 +752,6 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
 
       f_stress = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (Kundeg[i] * g);
       if ((surfaceNormalNormi > 0.5) && (surfaceNormal[i].dot(dx0) <= -0.5*pow(volj, 1.0/3.0))) {
-        Matrix3d P = CreateOrthonormalBasisFromOneVector(surfaceNormal[i]);
-        Vector3d sU = P.col(0);
-        Vector3d sV = P.col(1);
-        Vector3d sW = P.col(2);
-        
         f_stress.noalias() += (2 * voli * volj) * sigmaBC_i * Kundeg[i] * (g.dot(sU)*sU - g.dot(sV)*sV - g.dot(sW)*sW);
       }
 
@@ -766,8 +764,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
       LimitDoubleMagnitude(delVdotDelR, 0.01 * Lookup[SIGNAL_VELOCITY][itype]);
       mu_ij = h * delVdotDelR / (r + 0.1 * h); // units: [m * m/s / m = m/s]
       //if (delVdotDelR < 0) { // i.e. if (dx.dot(dv) < 0) // To be consistent with the viscosity proposed by Monaghan
-      visc_magnitude = (-Lookup[VISCOSITY_Q1][itype] * Lookup[SIGNAL_VELOCITY][itype] * mu_ij
-                        + Lookup[VISCOSITY_Q2][itype] * mu_ij * mu_ij) / Lookup[REFERENCE_DENSITY][itype]; // units: m^5/(s^2 kg))
+			visc_magnitude = ((-Lookup[VISCOSITY_Q1][itype] * Lookup[SIGNAL_VELOCITY][itype] + Lookup[VISCOSITY_Q2][itype] * mu_ij) * mu_ij) / Lookup[REFERENCE_DENSITY][itype]; // units: m^5/(s^2 kg))
       f_visc = rmass[i] * rmass[j] * visc_magnitude * wfd * dx / (r + 1.0e-2 * h); // units: kg^2 * m^5/(s^2 kg) * m^-4 = kg m / s^2 = N
         //} else {
         //f_visc = Vector3d(0.0, 0.0, 0.0);
