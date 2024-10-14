@@ -67,8 +67,8 @@ class PairTlsph : public Pair {
                        const double vol_specific_energy, const double pInitial, const double d_iso,
                        double &pFinal, double &p_rate);
   void ComputeStressDeviator(const int i, const double mass_specific_energy, const Eigen::Matrix3d &sigmaInitial_dev,
-                             const Eigen::Matrix3d &d_dev, Eigen::Matrix3d &sigmaFinal_dev,
-                             Eigen::Matrix3d &sigma_dev_rate, double &plastic_strain_increment);
+                             const Eigen::Matrix3d &d_dev, Eigen::Matrix3d &sigmaFinal_dev, Eigen::Matrix3d &sigma_dev_rate, 
+                             double &plastic_strain_increment, const double pFinal);
   void ComputeDamage(const int i, const Eigen::Matrix3d &strain, const Eigen::Matrix3d &sigmaFinal,
                      Eigen::Matrix3d &sigma_damaged, double plastic_strain_increment);
   void UpdateDegradation();
@@ -99,7 +99,7 @@ class PairTlsph : public Pair {
   Eigen::Vector3d *surfaceNormal; // Vector normal to the boundary pointing outwards
   Eigen::Matrix3d *CauchyStress;
   double *detF, *particle_dt;
-	double *vij_max;
+  double *vij_max;
   double *hourglass_error;
   int *numNeighsRefConfig;
 
@@ -172,15 +172,19 @@ class PairTlsph : public Pair {
 
     CRITICAL_ENERGY_RELEASE_RATE = 50,
 
-		LH_A = 51,
-		LH_B = 52,
-		LH_n = 53,
-		SWIFT_A = 54,
-		SWIFT_B = 55,
-		SWIFT_n = 56,
-		SWIFT_eps0 = 57,
-		
-		MAX_KEY_VALUE = 58
+    LH_A = 51,
+    LH_B = 52,
+    LH_n = 53,
+    SWIFT_A = 54,
+    SWIFT_B = 55,
+    SWIFT_n = 56,
+    SWIFT_eps0 = 57,
+
+    GTN_Q1 = 58,
+    GTN_Q2 = 59,
+    GTN_AN = 60,
+    
+    MAX_KEY_VALUE = 61
   };
 
   struct
@@ -190,9 +194,9 @@ class PairTlsph : public Pair {
     bool failure_max_principal_stress;
     bool failure_max_plastic_strain;
     bool failure_johnson_cook;
+    bool failure_gtn;
     bool failure_max_pairwise_strain;
-    bool
-        integration_point_wise;    // true if failure model applies to stress/strain state of integration point
+    bool integration_point_wise;    // true if failure model applies to stress/strain state of integration point
     bool failure_energy_release_rate;
 
     failure_types()
@@ -202,6 +206,7 @@ class PairTlsph : public Pair {
       failure_max_principal_stress = false;
       failure_max_plastic_strain = false;
       failure_johnson_cook = false;
+      failure_gtn = false;
       failure_max_pairwise_strain = false;
       integration_point_wise = false;
       failure_energy_release_rate = false;
