@@ -2130,6 +2130,7 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
   double *eff_plastic_strain_rate = atom->eff_plastic_strain_rate;
   double *radius = atom->radius;
   double *damage = atom->damage;
+	double *damage_init = atom->damage_init;
   int *type = atom->type;
   int itype = type[i];
   double jc_failure_strain;
@@ -2167,8 +2168,8 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
     }
   } else if (failureModel[itype].failure_johnson_cook) {
     damage_init[i] += JohnsonCookDamageIncrement(pressure, stress_deviator, Lookup[FAILURE_JC_D1][itype],
-                                            Lookup[FAILURE_JC_D2][itype], Lookup[FAILURE_JC_D3][itype], Lookup[FAILURE_JC_D4][itype],
-                                            Lookup[FAILURE_JC_EPDOT0][itype], eff_plastic_strain_rate[i], plastic_strain_increment);
+                                                 Lookup[FAILURE_JC_D2][itype], Lookup[FAILURE_JC_D3][itype], Lookup[FAILURE_JC_D4][itype],
+                                                 Lookup[FAILURE_JC_EPDOT0][itype], eff_plastic_strain_rate[i], plastic_strain_increment);
     if (damage_init[i] >= 1.0) damage[i] = 1.0;
   }
 
