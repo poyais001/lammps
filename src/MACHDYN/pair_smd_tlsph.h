@@ -76,6 +76,7 @@ class PairTlsph : public Pair {
   Eigen::Vector3d ComputeFstress(const int i, const int j, const int jj, const double surfaceNormalNormi, 
                                  const Eigen::Vector3d dx0, const double r0, const Eigen::Vector3d g, 
                                  const Eigen::Matrix3d sigmaBC_i, const double scale, const double strain1d = 1.0);
+  double CalculateScale(const float degradation, const int itype);
 
 
  protected:

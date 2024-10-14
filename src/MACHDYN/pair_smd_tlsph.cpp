@@ -59,18 +59,6 @@ static constexpr double DETF_MAX = 200.0; // maximum tension deformation allowed
 #define M_PI 3.141592653589793238462643383279502884197169399375105820974944
 #endif
 
-static double CalculateScale(const float degradation) {
-  double start = 0.9;
-  if (degradation <= start) {
-    return 1.0;
-  }
-  if (degradation >= 1.0) {
-    return 0.0;
-  }
-  
-  return 0.5 + 0.5 * cos( M_PI * (degradation - start) / (1.0 - start) );
-}
-
 static Matrix3d CreateOrthonormalBasisFromOneVector(Vector3d sU) {
   Matrix3d P;
   Vector3d sV, sW;
@@ -349,7 +337,11 @@ void PairTlsph::PreCompute() {
         if (dv_norm > vij_max[i]) vij_max[i] = dv_norm;
 
         // scale the interaction according to the damage variable
-        scale = CalculateScale(degradation_ij[i][jj]);
+        if (failureModel[itype].failure_none == true) {
+          scale = 1.0;
+        } else {
+          scale = CalculateScale(degradation_ij[i][jj], itype);
+        }
         wf = wf_list[i][jj] * scale;
         wfd = wfd_list[i][jj] * scale;
         g = (wfd / r0) * dx0;
@@ -724,9 +716,19 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
 
       // scale the interaction according to the damage variable
       //scale = CalculateScale(degradation_ij[i][jj], r, r0);
-      scale = CalculateScale(degradation_ij[i][jj]);
-      wf = wf_list[i][jj];// * scale;
-      wfd = wfd_list[i][jj];// * scale;
+      if (failureModel[itype].failure_none == true) {
+        scale = 1.0;
+      } else {
+        scale = CalculateScale(degradation_ij[i][jj], itype);
+      }
+
+      wf = wf_list[i][jj];
+      wfd = wfd_list[i][jj];
+
+      if ((failureModel[itype].failure_none == false) && (failureModel[itype].integration_point_wise == false)) {
+        wf *= scale;
+        wfd *= scale;
+      }
 
       g = (wfd_list[i][jj] / r0) * dx0; // uncorrected kernel gradient
 
@@ -840,9 +842,6 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
       hourglass_error[i] /= shepardWeight;
     }
     double deltat_1 = sqrt(2 * radius[i] * rmass[i]/ sqrt( f[i][0]*f[i][0] + f[i][1]*f[i][1] + f[i][2]*f[i][2] ));
-    if (particle_dt[i] > deltat_1) {
-      printf("particle_dt[%d] > deltat_1 with f = [%f %f %f]\n", tag[i], f[i][0], f[i][1], f[i][2]);
-    }
     particle_dt[i] = MIN(particle_dt[i], deltat_1); // Monaghan deltat_1 
     dtCFL = MIN(dtCFL, particle_dt[i]);
 
@@ -1671,7 +1670,7 @@ void PairTlsph::coeff(int narg, char **arg) {
         utils::logmesg(lmp, "{:60} : {}\n", "parameter d3", Lookup[FAILURE_JC_D3][itype]);
         utils::logmesg(lmp, "{:60} : {}\n", "parameter d4", Lookup[FAILURE_JC_D4][itype]);
         utils::logmesg(lmp, "{:60} : {}\n", "reference plastic strain rate", Lookup[FAILURE_JC_EPDOT0][itype]);
-				if (failureModel[itype].failure_coupling == false)
+        if (failureModel[itype].failure_coupling == false)
           utils::logmesg(lmp, "{:60}\n", "NO COUPLING WITH CONSTITUTIVE LAWS");
       }
 
@@ -2136,8 +2135,8 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
   double *eff_plastic_strain_rate = atom->eff_plastic_strain_rate;
   double *radius = atom->radius;
   double *damage = atom->damage;
-	double *damage_init = atom->damage_init;
-	double damage_increment;
+  double *damage_init = atom->damage_init;
+  double damage_increment;
   int *type = atom->type;
   int itype = type[i];
   double jc_failure_strain;
@@ -2177,12 +2176,12 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
     damage_increment += JohnsonCookDamageIncrement(pressure, stress_deviator, Lookup[FAILURE_JC_D1][itype],
                                                    Lookup[FAILURE_JC_D2][itype], Lookup[FAILURE_JC_D3][itype], Lookup[FAILURE_JC_D4][itype],
                                                    Lookup[FAILURE_JC_EPDOT0][itype], eff_plastic_strain_rate[i], plastic_strain_increment);
-	  if (failureModel[itype].failure_coupling == true) {
-	    damage[i] += damage_increment;
-	  } else {
-	    damage_init[i] += damage_increment;
-	    if (damage_init[i] >= 1.0) damage[i] = 1.0;
-	  }
+    if (failureModel[itype].failure_coupling == true) {
+      damage[i] += damage_increment;
+    } else {
+      damage_init[i] += damage_increment;
+      if (damage_init[i] >= 1.0) damage[i] = 1.0;
+    }
   }
 
   damage[i] = MIN(damage[i], 1.0);
@@ -2296,7 +2295,7 @@ void PairTlsph::UpdateDegradation() {
         if (strain1d > strain1d_max) {
           degradation_ij[i][jj] = std::max(degradation_ij[i][jj], float((strain1d - strain1d_max) / softening_strain));
           if (degradation_ij[i][jj] >= 0.99) {
-            printf("Link between %d and %d destroyed.\n", tag[i], partner[i][jj]);
+            //printf("Link between %d and %d destroyed.\n", tag[i], partner[i][jj]);
             std::cout << "Here is dx0:" << std::endl << dx0 << std::endl;
             degradation_ij[i][jj] = 0.99;
           }
@@ -2394,6 +2393,21 @@ void PairTlsph:: AdjustStressForZeroForceBC(const Matrix3d sigma, const Vector3d
   }
 }
 
+double PairTlsph::CalculateScale(const float degradation, const int itype) {
+  if (failureModel[itype].integration_point_wise == true) {
+    double start = 0.9;
+    if (degradation <= start) {
+      return 1.0;
+    }
+    if (degradation >= 1.0) {
+      return 0.0;
+    }
+
+    return 0.5 + 0.5 * cos( M_PI * (degradation - start) / (1.0 - start) );
+  } else {
+    return 1.0 - degradation;
+  }
+}
 
 Vector3d PairTlsph::ComputeFstress(const int i, const int j, const int jj, const double surfaceNormalNormi, const Vector3d dx0, const double r0, const Vector3d g, const Matrix3d sigmaBC_i, const double scale, const double strain1d) {
   double *vfrac = atom->vfrac;

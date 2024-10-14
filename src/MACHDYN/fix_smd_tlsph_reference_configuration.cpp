@@ -118,6 +118,7 @@ void FixSMD_TLSPH_ReferenceConfiguration::init() {
 
 void FixSMD_TLSPH_ReferenceConfiguration::pre_exchange() {
 
+  printf("in FixSMD_TLSPH_ReferenceConfiguration::pre_exchange() with updateFlag = %d \n", updateFlag);
   double **defgrad = atom->smd_data_9;
   double *radius = atom->radius;
   double *rho = atom->rho;
@@ -302,23 +303,23 @@ void FixSMD_TLSPH_ReferenceConfiguration::setup(int /*vflag*/) {
         partner[i][npartner[i]] = tag[j];
         wfd_list[i][npartner[i]] = wfd;
         wf_list[i][npartner[i]] = wf;
-				Vector3d x0j;
-				x0j[0] = x0[j][0];
-				x0j[1] = x0[j][1];
-				x0j[2] = x0[j][2];
-				partnerx0[i][npartner[i]] = x0j;
-				partnervol[i][npartner[i]] = vfrac[j];
+        Vector3d x0j;
+        x0j[0] = x0[j][0];
+        x0j[1] = x0[j][1];
+        x0j[2] = x0[j][2];
+        partnerx0[i][npartner[i]] = x0j;
+        partnervol[i][npartner[i]] = vfrac[j];
         npartner[i]++;
         if (j < nlocal) {
           partner[j][npartner[j]] = tag[i];
           wfd_list[j][npartner[j]] = wfd;
           wf_list[j][npartner[j]] = wf;
-					Vector3d x0i;
-					x0i[0] = x0[i][0];
-					x0i[1] = x0[i][1];
-					x0i[2] = x0[i][2];
-					partnerx0[j][npartner[j]] = x0i;
-					partnervol[j][npartner[j]] = vfrac[i];
+          Vector3d x0i;
+          x0i[0] = x0[i][0];
+          x0i[1] = x0[i][1];
+          x0i[2] = x0[i][2];
+          partnerx0[j][npartner[j]] = x0i;
+          partnervol[j][npartner[j]] = vfrac[i];
           npartner[j]++;
         }
       }
@@ -373,8 +374,8 @@ double FixSMD_TLSPH_ReferenceConfiguration::memory_usage() {
   bytes += (double)nmax * maxpartner * sizeof(float); // wf_list
   bytes += (double)nmax * maxpartner * sizeof(float); // wfd_list
   bytes += (double)nmax * maxpartner * sizeof(float); // damage_per_interaction array
-	bytes += (double)nmax * maxpartner * sizeof(Vector3d); // partnerx0 array
-	bytes += (double)nmax * maxpartner * sizeof(double); // partnervol array
+  bytes += (double)nmax * maxpartner * sizeof(Vector3d); // partnerx0 array
+  bytes += (double)nmax * maxpartner * sizeof(double); // partnervol array
   bytes += (double)nmax * sizeof(int); // npartner array
   return bytes;
 
@@ -391,8 +392,8 @@ void FixSMD_TLSPH_ReferenceConfiguration::grow_arrays(int nmax) {
   memory->grow(wf_list, nmax, maxpartner, "tlsph_refconfig_neigh:wf");
   memory->grow(degradation_ij, nmax, maxpartner, "tlsph_refconfig_neigh:degradation_ij");
   memory->grow(energy_per_bond, nmax, maxpartner, "tlsph_refconfig_neigh:damage_onset_strain");
-	memory->grow(partnerx0, nmax, maxpartner, "tlsph_refconfig_neigh:partnerx0");
-	memory->grow(partnervol, nmax, maxpartner, "tlsph_refconfig_neigh:partnervol");
+  memory->grow(partnerx0, nmax, maxpartner, "tlsph_refconfig_neigh:partnerx0");
+  memory->grow(partnervol, nmax, maxpartner, "tlsph_refconfig_neigh:partnervol");
 }
 
 /* ----------------------------------------------------------------------
@@ -407,8 +408,8 @@ void FixSMD_TLSPH_ReferenceConfiguration::copy_arrays(int i, int j, int /*delfla
     wf_list[j][m] = wf_list[i][m];
     degradation_ij[j][m] = degradation_ij[i][m];
     energy_per_bond[j][m] = energy_per_bond[i][m];
-		partnerx0[j][m] = partnerx0[i][m];
-		partnervol[j][m] = partnervol[i][m];
+    partnerx0[j][m] = partnerx0[i][m];
+    partnervol[j][m] = partnervol[i][m];
   }
 }
 
@@ -428,10 +429,10 @@ int FixSMD_TLSPH_ReferenceConfiguration::pack_exchange(int i, double *buf) {
     buf[m++] = wf_list[i][n];
     buf[m++] = degradation_ij[i][n];
     buf[m++] = energy_per_bond[i][n];
-		buf[m++] = partnerx0[i][n][0];
-		buf[m++] = partnerx0[i][n][1];
-		buf[m++] = partnerx0[i][n][2];
-		buf[m++] = partnervol[i][n];
+    buf[m++] = partnerx0[i][n][0];
+    buf[m++] = partnerx0[i][n][1];
+    buf[m++] = partnerx0[i][n][2];
+    buf[m++] = partnervol[i][n];
   }
   return m;
 
@@ -459,10 +460,10 @@ int FixSMD_TLSPH_ReferenceConfiguration::unpack_exchange(int nlocal, double *buf
     wf_list[nlocal][n] = static_cast<float>(buf[m++]);
     degradation_ij[nlocal][n] = static_cast<float>(buf[m++]);
     energy_per_bond[nlocal][n] = static_cast<float>(buf[m++]);
-		partnerx0[nlocal][n][0] = static_cast<double>(buf[m++]);
-		partnerx0[nlocal][n][1] = static_cast<double>(buf[m++]);
-		partnerx0[nlocal][n][2] = static_cast<double>(buf[m++]);
-		partnervol[nlocal][n] = static_cast<double>(buf[m++]);
+    partnerx0[nlocal][n][0] = static_cast<double>(buf[m++]);
+    partnerx0[nlocal][n][1] = static_cast<double>(buf[m++]);
+    partnerx0[nlocal][n][2] = static_cast<double>(buf[m++]);
+    partnervol[nlocal][n] = static_cast<double>(buf[m++]);
   }
   return m;
 }
@@ -482,10 +483,10 @@ int FixSMD_TLSPH_ReferenceConfiguration::pack_restart(int i, double *buf) {
     buf[m++] = wf_list[i][n];
     buf[m++] = degradation_ij[i][n];
     buf[m++] = energy_per_bond[i][n];
-		buf[m++] = partnerx0[i][n][0];
-		buf[m++] = partnerx0[i][n][1];
-		buf[m++] = partnerx0[i][n][2];
-		buf[m++] = partnervol[i][n];
+    buf[m++] = partnerx0[i][n][0];
+    buf[m++] = partnerx0[i][n][1];
+    buf[m++] = partnerx0[i][n][2];
+    buf[m++] = partnervol[i][n];
   }
   return m;
 }
