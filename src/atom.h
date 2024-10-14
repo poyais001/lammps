@@ -153,7 +153,7 @@ class Atom : protected Pointers {
   double **smd_stress;
   double *eff_plastic_strain;
   double *eff_plastic_strain_rate;
-  double *damage;
+  double *damage, *damage_init;
 
   // RHEO package
 
@@ -209,7 +209,7 @@ class Atom : protected Pointers {
   // MACHDYN package
 
   int x0_flag;
-  int smd_flag, damage_flag;
+  int smd_flag, damage_flag, damage_init_flag;
   int contact_radius_flag, smd_data_9_flag, smd_stress_flag;
   int eff_plastic_strain_flag, eff_plastic_strain_rate_flag;
 

@@ -197,6 +197,7 @@ Atom::Atom(LAMMPS *_lmp) : Pointers(_lmp), atom_style(nullptr), avec(nullptr), a
   eff_plastic_strain = nullptr;
   eff_plastic_strain_rate = nullptr;
   damage = nullptr;
+  damage_init = nullptr;
 
   // RHEO package
 
@@ -560,6 +561,7 @@ void Atom::peratom_create()
   add_peratom("eff_plastic_strain",&eff_plastic_strain,DOUBLE,0);
   add_peratom("eff_plastic_strain_rate",&eff_plastic_strain_rate,DOUBLE,0);
   add_peratom("damage",&damage,DOUBLE,0);
+  add_peratom("damage_init",&damage_init,DOUBLE,0);
 
   // AMOEBA package
 
@@ -653,7 +655,7 @@ void Atom::set_atomflag_defaults()
   dpd_flag = edpd_flag = tdpd_flag = 0;
   sp_flag = 0;
   x0_flag = 0;
-  smd_flag = damage_flag = 0;
+  smd_flag = damage_flag = damage_init_flag = 0;
   mesont_flag = 0;
   contact_radius_flag = smd_data_9_flag = smd_stress_flag = 0;
   eff_plastic_strain_flag = eff_plastic_strain_rate_flag = 0;
@@ -3096,6 +3098,7 @@ void *Atom::extract(const char *name)
   if (strcmp(name, "eff_plastic_strain_rate") == 0)
     return (void *) eff_plastic_strain_rate;
   if (strcmp(name, "damage") == 0) return (void *) damage;
+  if (strcmp(name, "damage_init") == 0) return (void *) damage_init;
 
   // DPD-REACT package
 
@@ -3227,6 +3230,7 @@ int Atom::extract_datatype(const char *name)
   if (strcmp(name, "eff_plastic_strain") == 0) return LAMMPS_DOUBLE;
   if (strcmp(name, "eff_plastic_strain_rate") == 0) return LAMMPS_DOUBLE;
   if (strcmp(name, "damage") == 0) return LAMMPS_DOUBLE;
+  if (strcmp(name, "damage_init") == 0) return LAMMPS_DOUBLE;
 
   // DPD-REACT package
 
@@ -3469,6 +3473,7 @@ int Atom::extract_size(const char *name, int type)
     if (strcmp(name, "eff_plastic_strain") == 0) return nlocal;
     if (strcmp(name, "eff_plastic_strain_rate") == 0) return nlocal;
     if (strcmp(name, "damage") == 0) return nlocal;
+    if (strcmp(name, "damage_init") == 0) return nlocal;
 
     // DPD-REACT package
 

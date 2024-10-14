@@ -22,37 +22,30 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
-#ifdef ATOM_CLASS
+#ifdef COMPUTE_CLASS
 // clang-format off
-AtomStyle(smd,AtomVecSMD);
+ComputeStyle(smd/damage/init,ComputeSMDDamageInit)
 // clang-format on
 #else
 
-#ifndef LMP_ATOM_VEC_SMD_H
-#define LMP_ATOM_VEC_SMD_H
+#ifndef LMP_COMPUTE_SMD_DAMAGE_INIT_H
+#define LMP_COMPUTE_SMD_DAMAGE_INIT_H
 
-#include "atom_vec.h"
+#include "compute.h"
 
 namespace LAMMPS_NS {
 
-class AtomVecSMD : virtual public AtomVec {
+class ComputeSMDDamageInit : public Compute {
  public:
-  AtomVecSMD(class LAMMPS *);
-
-  void grow_pointers() override;
-  void force_clear(int, size_t) override;
-  void create_atom_post(int) override;
-  void data_atom_post(int) override;
-  void write_data_restricted_to_general() override;
-  void write_data_restore_restricted() override;
+  ComputeSMDDamageInit(class LAMMPS *, int, char **);
+  ~ComputeSMDDamageInit() override;
+  void init() override;
+  void compute_peratom() override;
+  double memory_usage() override;
 
  private:
-  tagint *molecule;
-  double *esph, *desph, *vfrac, *rmass, *radius, *contact_radius;
-  double *eff_plastic_strain, *eff_plastic_strain_rate, *damage, *damage_init;
-  double **x0, **smd_data_9, **smd_stress, **vest;
-  double *rho;
-  double **x0_hold;
+  int nmax;
+  double *damage_init_vector;
 };
 
 }    // namespace LAMMPS_NS
