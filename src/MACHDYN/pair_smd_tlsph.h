@@ -172,7 +172,15 @@ class PairTlsph : public Pair {
 
     CRITICAL_ENERGY_RELEASE_RATE = 50,
 
-    MAX_KEY_VALUE = 51
+		LH_A = 51,
+		LH_B = 52,
+		LH_n = 53,
+		SWIFT_A = 54,
+		SWIFT_B = 55,
+		SWIFT_n = 56,
+		SWIFT_eps0 = 57,
+		
+		MAX_KEY_VALUE = 58
   };
 
   struct
