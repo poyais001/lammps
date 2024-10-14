@@ -48,7 +48,7 @@ class ComputeSMDTLSPHK0 : public Compute {
   double **K_array;
 };
 
-}    // namespace LAMMPS_NS
+}    // namespace LAMMPS_NS 
 
 #endif
 #endif
