@@ -209,14 +209,14 @@ void PairTlsph::PreCompute() {
   float **degradation_ij = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->degradation_ij;
   Vector3d **partnerx0 = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->partnerx0;
   double **partnervol = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->partnervol;
-	double r, r0, r0Sq, wf, wfd, h, irad, voli, volj, scale, shepardWeight, inverseShepardWeight;
+  double r, r0, r0Sq, wf, wfd, h, irad, voli, volj, scale, shepardWeight, inverseShepardWeight;
   Vector3d dx, dx0, dx0mirror, dv, g;
   Matrix3d Ktmp, Ftmp, Fdottmp, L, U, eye;
   Vector3d vi, vj, vinti, vintj, xi, xj, x0i, x0j, dvint;
   int periodic = (domain->xperiodic || domain->yperiodic || domain->zperiodic);
   bool status;
   Matrix3d F0;
-	double surfaceNormalNormi, dv_norm;
+  double surfaceNormalNormi, dv_norm;
 
   dtCFL = 1.0e22;
   eye.setIdentity();
@@ -345,8 +345,8 @@ void PairTlsph::PreCompute() {
         // distance vectors in current and reference configuration, velocity difference
         dv = vj - vi;
         dvint = vintj - vinti;
-				dv_norm = dv.norm();
-				if (dv_norm > vij_max[i]) vij_max[i] = dv_norm;
+        dv_norm = dv.norm();
+        if (dv_norm > vij_max[i]) vij_max[i] = dv_norm;
 
         // scale the interaction according to the damage variable
         scale = CalculateScale(degradation_ij[i][jj]);
@@ -355,9 +355,9 @@ void PairTlsph::PreCompute() {
         g = (wfd / r0) * dx0;
 
         /* build matrices */
-				Ktmp = -g * dx0.transpose();
-				Fdottmp = -dv * g.transpose();
-				Ftmp = -(dx - dx0) * g.transpose();
+        Ktmp = -g * dx0.transpose();
+        Fdottmp = -dv * g.transpose();
+        Ftmp = -(dx - dx0) * g.transpose();
 
         K[i].noalias() += volj * Ktmp;
         if (updateKundegFlag == 1) Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
@@ -373,8 +373,8 @@ void PairTlsph::PreCompute() {
 
       // normalize average velocity field around an integration point
       if (shepardWeight > 0.0) {
-			  inverseShepardWeight = 1/shepardWeight;
-			  smoothVelDifference[i] *= inverseShepardWeight;
+        inverseShepardWeight = 1/shepardWeight;
+        smoothVelDifference[i] *= inverseShepardWeight;
       } else {
         smoothVelDifference[i].setZero();
       }
@@ -630,11 +630,11 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
   int *type = atom->type;
   int nlocal = atom->nlocal;
   int i, j, jj, jnum, itype, idim;
-	double r, hg_mag, wf, wfd, h, r0, r0Sq, voli, volj, r_plus_h, over_r_plus_h;
-	double delVdotDelR, deltaE, mu_ij, hg_err, gamma_dot_dx, delta, scale, rmassij;
+  double r, hg_mag, wf, wfd, h, r0, r0Sq, voli, volj, r_plus_h, over_r_plus_h;
+  double delVdotDelR, deltaE, mu_ij, hg_err, gamma_dot_dx, delta, scale, rmassij;
   double softening_strain, shepardWeight;
   double surfaceNormalNormi;
-	Vector3d fi, fj, dx0, dx, dv, f_stress, f_hg, dxp_i, dxp_j, gamma, g, gamma_i, gamma_j, x0i, x0j, wfddx;
+  Vector3d fi, fj, dx0, dx, dv, f_stress, f_hg, dxp_i, dxp_j, gamma, g, gamma_i, gamma_j, x0i, x0j, wfddx;
   Vector3d xi, xj, vi, vj, f_visc, sumForces, f_spring;
   int periodic = (domain->xperiodic || domain->yperiodic || domain->zperiodic);
 
@@ -647,7 +647,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
   Vector3d **partnerx0 = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->partnerx0;
   double **partnervol = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->partnervol;
   Matrix3d eye;
-	Vector3d sU, sV, sW;
+  Vector3d sU, sV, sW;
   eye.setIdentity();
 
   ev_init(eflag, vflag);
@@ -743,16 +743,16 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
       /*
        * artificial viscosity
        */
-			over_r_plus_h = 1 / (r + 0.1 * h);
-			delVdotDelR = dx.dot(dv) * over_r_plus_h; // project relative velocity onto unit particle distance vector [m/s]
+      over_r_plus_h = 1 / (r + 0.1 * h);
+      delVdotDelR = dx.dot(dv) * over_r_plus_h; // project relative velocity onto unit particle distance vector [m/s]
       LimitDoubleMagnitude(delVdotDelR, 0.01 * Lookup[SIGNAL_VELOCITY][itype]);
-			mu_ij = h * delVdotDelR * over_r_plus_h; // units: [m * m/s / m = m/s]
-			wfddx = wfd * dx;
+      mu_ij = h * delVdotDelR * over_r_plus_h; // units: [m * m/s / m = m/s]
+      wfddx = wfd * dx;
       //if (delVdotDelR < 0) { // i.e. if (dx.dot(dv) < 0) // To be consistent with the viscosity proposed by Monaghan
-			//visc_magnitude = ((-Lookup[VISCOSITY_Q1][itype] * Lookup[SIGNAL_VELOCITY][itype] + Lookup[VISCOSITY_Q2][itype] * mu_ij) * mu_ij) / Lookup[REFERENCE_DENSITY][itype]; // units: m^5/(s^2 kg))
-			rmassij = rmass[i] * rmass[j];
-			r_plus_h = r + 1.0e-2 * h;
-			f_visc = rmassij * (-Lookup[VISCOSITY_Q1][itype] * Lookup[SIGNAL_VELOCITY][itype] + Lookup[VISCOSITY_Q2][itype] * mu_ij) * mu_ij * wfddx / (r_plus_h * Lookup[REFERENCE_DENSITY][itype]); // units: kg^2 * m^5/(s^2 kg) * m^-4 = kg m / s^2 = N
+      //visc_magnitude = ((-Lookup[VISCOSITY_Q1][itype] * Lookup[SIGNAL_VELOCITY][itype] + Lookup[VISCOSITY_Q2][itype] * mu_ij) * mu_ij) / Lookup[REFERENCE_DENSITY][itype]; // units: m^5/(s^2 kg))
+      rmassij = rmass[i] * rmass[j];
+      r_plus_h = r + 1.0e-2 * h;
+      f_visc = rmassij * (-Lookup[VISCOSITY_Q1][itype] * Lookup[SIGNAL_VELOCITY][itype] + Lookup[VISCOSITY_Q2][itype] * mu_ij) * mu_ij * wfddx / (r_plus_h * Lookup[REFERENCE_DENSITY][itype]); // units: kg^2 * m^5/(s^2 kg) * m^-4 = kg m / s^2 = N
         //} else {
         //f_visc = Vector3d(0.0, 0.0, 0.0);
         //}
@@ -779,7 +779,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
         } else {
           hg_mag = 0.0;
         }
-				f_hg = rmassij * hg_mag * wfddx / r_plus_h;
+        f_hg = rmassij * hg_mag * wfddx / r_plus_h;
 
       } else {
         /*
@@ -788,10 +788,10 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
 
         gamma_dot_dx = gamma.dot(dx); // project hourglass error vector onto pair distance vector
         LimitDoubleMagnitude(gamma_dot_dx, 0.1 * r); // limit projected vector to avoid numerical instabilities
-				delta = 0.5 * gamma_dot_dx * over_r_plus_h; // delta has dimensions of [m]
+        delta = 0.5 * gamma_dot_dx * over_r_plus_h; // delta has dimensions of [m]
         hg_mag = Lookup[HOURGLASS_CONTROL_AMPLITUDE][itype] * delta / (r0Sq + 0.01 * h * h); // hg_mag has dimensions [m^(-1)]
         hg_mag *= -voli * volj * wf * Lookup[YOUNGS_MODULUS][itype]; // hg_mag has dimensions [J*m^(-1)] = [N]
-				f_hg = (hg_mag * over_r_plus_h) * dx;
+        f_hg = (hg_mag * over_r_plus_h) * dx;
       }
 
       // scale hourglass force with damage
@@ -1012,12 +1012,12 @@ void PairTlsph::AssembleStress() {
 
         effective_longitudinal_modulus(itype, dt, d_iso, p_rate, d_dev, sigma_dev_rate, damage[i], K_eff, mu_eff, M_eff);
 
-				if ((damage[i] > 0.0) && (pFinal > 0.0)) {
-				  // If the particle is under tension, voids are open:
-				  p_wave_speed = sqrt(M_eff * (1.0 - damage[i]) / (rho[i]*(1.0 - damage[i]) + Lookup[REFERENCE_DENSITY][itype] * damage[i]));
-				} else {
-				  p_wave_speed = sqrt(M_eff / rho[i]);
-				}
+        if ((damage[i] > 0.0) && (pFinal > 0.0)) {
+          // If the particle is under tension, voids are open:
+          p_wave_speed = sqrt(M_eff * (1.0 - damage[i]) / (rho[i]*(1.0 - damage[i]) + Lookup[REFERENCE_DENSITY][itype] * damage[i]));
+        } else {
+          p_wave_speed = sqrt(M_eff / rho[i]);
+        }
 
         if (mol[i] < 0) {
           error->one(FLERR, "this should not happen");
@@ -2169,7 +2169,7 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
     damage_init[i] += JohnsonCookDamageIncrement(pressure, stress_deviator, Lookup[FAILURE_JC_D1][itype],
                                             Lookup[FAILURE_JC_D2][itype], Lookup[FAILURE_JC_D3][itype], Lookup[FAILURE_JC_D4][itype],
                                             Lookup[FAILURE_JC_EPDOT0][itype], eff_plastic_strain_rate[i], plastic_strain_increment);
-	  if (damage_init[i] >= 1.0) damage[i] = 1.0;
+    if (damage_init[i] >= 1.0) damage[i] = 1.0;
   }
 
   damage[i] = MIN(damage[i], 1.0);

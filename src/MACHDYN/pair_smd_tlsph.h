@@ -99,7 +99,7 @@ class PairTlsph : public Pair {
   Eigen::Vector3d *surfaceNormal; // Vector normal to the boundary pointing outwards
   Eigen::Matrix3d *CauchyStress;
   double *detF, *particle_dt;
-	double *vij_max;
+  double *vij_max;
   double *hourglass_error;
   int *numNeighsRefConfig;
 
@@ -182,6 +182,7 @@ class PairTlsph : public Pair {
     bool failure_max_principal_stress;
     bool failure_max_plastic_strain;
     bool failure_johnson_cook;
+    bool failure_coupling; // true when the JC failure model couples damage with the constitutive laws.
     bool failure_max_pairwise_strain;
     bool
         integration_point_wise;    // true if failure model applies to stress/strain state of integration point
@@ -194,6 +195,7 @@ class PairTlsph : public Pair {
       failure_max_principal_stress = false;
       failure_max_plastic_strain = false;
       failure_johnson_cook = false;
+      failure_coupling = true;
       failure_max_pairwise_strain = false;
       integration_point_wise = false;
       failure_energy_release_rate = false;
