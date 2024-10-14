@@ -359,13 +359,9 @@ void PairTlsph::PreCompute() {
         Fincr[i].noalias() += volj * Ftmp;
         shepardWeight += volj * wf;
         smoothVelDifference[i].noalias() += volj * wf * dvint;
-        
+
         if (updateSurfaceNormal == 1) surfaceNormal[i].noalias() += volj * wfd_list[i][jj] * dx0;
-        if ((tag[i] == 3242) && (updateSurfaceNormal == 1) ) {
-          Vector3d tmp = volj * wfd_list[i][jj] * dx0; 
-          printf("2. sNij = [%f %f %f]\n", tmp[0], tmp[1], tmp[2]);
-        }
-        
+
         numNeighsRefConfig[i]++;
       } // end loop over j
 
@@ -381,8 +377,6 @@ void PairTlsph::PreCompute() {
       if (updateKundegFlag == 1) {
         Matrix3d KundegINV;
         KundegINV = Kundeg[i];
-        if (tag[i] == 4032)
-          std::cout << "00. Kundeg[" << tag[i] << "]:" << std::endl << Kundeg[i] << std::endl;
         pseudo_inverse_SVD(KundegINV);
         surfaceNormal[i] = KundegINV * surfaceNormal[i];
       } else {
@@ -391,7 +385,8 @@ void PairTlsph::PreCompute() {
       Fdot[i] *= K[i];
       Fincr[i] *= K[i];
       Fincr[i].noalias() += eye;
-      
+
+      // START
       if (updateKundegFlag == 1) {
       // Recalculate Kundeg to include mirror particles:
       
@@ -453,17 +448,6 @@ void PairTlsph::PreCompute() {
           volj = vfrac[j];
           
           Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0mirror * dx0mirror.transpose();
-          if ((tag[i] == 4032) && (tag[j] == 3300)) {
-            std::cout << "Here is dx0:" << std::endl << dx0 << std::endl;
-            std::cout << "Here is dx0mirror:" << std::endl << dx0mirror << std::endl;
-            std::cout << "Here is surfaceNormal[" << tag[i] << "]:" << std::endl << surfaceNormal[i] << std::endl;
-            std::cout << "Here is surfaceNormal.dx = " << surfaceNormal[i].dot(dx0) << std::endl;
-            std::cout << "-0.5*pow(volj, 1.0/3.0) = " << -0.5*pow(volj, 1.0/3.0) << std::endl;
-          }
-          if (tag[i] == 4032)
-            std::cout << "1. Kundeg[" << tag[i] << "][" << tag[j] << "] mirror :" << std::endl << -volj * (wfd_list[i][jj] / r0) * dx0mirror * dx0mirror.transpose() << std::endl;
-          if (tag[i] == 4032)
-            std::cout << "11. Kundeg[" << tag[i] << "]:" << std::endl << Kundeg[i] << std::endl;
         }
         
       } else {
@@ -759,12 +743,12 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
 
       f_stress = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (Kundeg[i] * g);
 
-			if (f_stress.norm() > 0.8){
-			  printf("f_stress[%d][%d] > 0.8 with f = [%f %f %f]\n", tag[i], tag[j], f_stress[0], f_stress[1], f_stress[2]);
-			  Vector3d fij = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (Kundeg[i] * g);
-			  printf("fij = [%f %f %f]\n", fij[0], fij[1], fij[2]);
-			  std::cout << "Here is Kundeg[i]:" << std::endl << Kundeg[i] << std::endl; 
-			}
+      if (f_stress.norm() > 0.8){
+        printf("f_stress[%d][%d] > 0.8 with f = [%f %f %f]\n", tag[i], tag[j], f_stress[0], f_stress[1], f_stress[2]);
+        Vector3d fij = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (Kundeg[i] * g);
+        printf("fij = [%f %f %f]\n", fij[0], fij[1], fij[2]);
+        std::cout << "Here is Kundeg[i]:" << std::endl << Kundeg[i] << std::endl; 
+      }
 
       energy_per_bond[i][jj] = f_stress.dot(dx); // THIS IS NOT THE ENERGY PER BOND, I AM USING THIS VARIABLE TO STORE THIS VALUE TEMPORARILY
       
@@ -868,9 +852,9 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
       hourglass_error[i] /= shepardWeight;
     }
     double deltat_1 = sqrt(2 * radius[i] * rmass[i]/ sqrt( f[i][0]*f[i][0] + f[i][1]*f[i][1] + f[i][2]*f[i][2] ));
-		if (particle_dt[i] > deltat_1) {
-		  printf("particle_dt[%d] > deltat_1 with f = [%f %f %f]\n", tag[i], f[i][0], f[i][1], f[i][2]);
-		}
+    if (particle_dt[i] > deltat_1) {
+      printf("particle_dt[%d] > deltat_1 with f = [%f %f %f]\n", tag[i], f[i][0], f[i][1], f[i][2]);
+    }
     particle_dt[i] = MIN(particle_dt[i], deltat_1); // Monaghan deltat_1 
     dtCFL = MIN(dtCFL, particle_dt[i]);
 
