@@ -24,21 +24,21 @@
 
 #ifdef COMPUTE_CLASS
 // clang-format off
-ComputeStyle(smd/tlsph/kundeg, ComputeSMDTLSPHKundeg)
+ComputeStyle(smd/tlsph/k0, ComputeSMDTLSPHK0)
 // clang-format on
 #else
 
-#ifndef LMP_COMPUTE_SMD_TLSPH_KUNDEG_H
-#define LMP_COMPUTE_SMD_TLSPH_KUNDEG_H
+#ifndef LMP_COMPUTE_SMD_TLSPH_K0_H
+#define LMP_COMPUTE_SMD_TLSPH_K0_H
 
 #include "compute.h"
 
 namespace LAMMPS_NS {
 
-class ComputeSMDTLSPHKundeg : public Compute {
+class ComputeSMDTLSPHK0 : public Compute {
  public:
-  ComputeSMDTLSPHKundeg(class LAMMPS *, int, char **);
-  ~ComputeSMDTLSPHKundeg() override;
+  ComputeSMDTLSPHK0(class LAMMPS *, int, char **);
+  ~ComputeSMDTLSPHK0() override;
   void init() override;
   void compute_peratom() override;
   double memory_usage() override;

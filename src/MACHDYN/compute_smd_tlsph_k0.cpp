@@ -25,7 +25,8 @@
  ------------------------------------------------------------------------- */
 
 #include <cstring>
-#include "compute_smd_tlsph_kundeg.h"
+#include "compute_smd_tlsph_k0.h"
+#include "fix_smd_tlsph_reference_configuration.h"
 #include "atom.h"
 #include "update.h"
 #include "modify.h"
@@ -41,10 +42,10 @@ using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-ComputeSMDTLSPHKundeg::ComputeSMDTLSPHKundeg(LAMMPS *lmp, int narg, char **arg) :
+ComputeSMDTLSPHK0::ComputeSMDTLSPHK0(LAMMPS *lmp, int narg, char **arg) :
 		Compute(lmp, narg, arg) {
 	if (narg != 3)
-		error->all(FLERR, "Illegal compute smd/tlsph_kundeg command");
+		error->all(FLERR, "Illegal compute smd/tlsph_k0 command");
 
 	peratom_flag = 1;
 	size_peratom_cols = 6;
@@ -55,25 +56,25 @@ ComputeSMDTLSPHKundeg::ComputeSMDTLSPHKundeg(LAMMPS *lmp, int narg, char **arg) 
 
 /* ---------------------------------------------------------------------- */
 
-ComputeSMDTLSPHKundeg::~ComputeSMDTLSPHKundeg() {
+ComputeSMDTLSPHK0::~ComputeSMDTLSPHK0() {
 	memory->sfree(K_array);
 }
 
 /* ---------------------------------------------------------------------- */
 
-void ComputeSMDTLSPHKundeg::init() {
+void ComputeSMDTLSPHK0::init() {
 
 	int count = 0;
 	for (int i = 0; i < modify->ncompute; i++)
-		if (strcmp(modify->compute[i]->style, "smd/tlsph_kundeg") == 0)
+		if (strcmp(modify->compute[i]->style, "smd/tlsph_k0") == 0)
 			count++;
 	if (count > 1 && comm->me == 0)
-		error->warning(FLERR, "More than one compute smd/tlsph_kundeg");
+		error->warning(FLERR, "More than one compute smd/tlsph_k0");
 }
 
 /* ---------------------------------------------------------------------- */
 
-void ComputeSMDTLSPHKundeg::compute_peratom() {
+void ComputeSMDTLSPHK0::compute_peratom() {
 	invoked_peratom = update->ntimestep;
 
 	// grow vector array if necessary
@@ -81,14 +82,18 @@ void ComputeSMDTLSPHKundeg::compute_peratom() {
 	if (atom->nmax > nmax) {
 		memory->destroy(K_array);
 		nmax = atom->nmax;
-		memory->create(K_array, nmax, size_peratom_cols, "kundegtensorVector");
+		memory->create(K_array, nmax, size_peratom_cols, "k0tensorVector");
 		array_atom = K_array;
 	}
 
 	int itmp = 0;
-	Matrix3d *T = (Matrix3d *) force->pair->extract("smd/tlsph/Kundeg_ptr", itmp);
+	int ifix_tlsph;
+	for (int i = 0; i < modify->nfix; i++)
+		if (strcmp(modify->fix[i]->style, "SMD_TLSPH_NEIGHBORS") == 0)
+			ifix_tlsph = i;
+	Matrix3d *T = ((FixSMD_TLSPH_ReferenceConfiguration *) modify->fix[ifix_tlsph])->K0;
 	if (T == NULL) {
-		error->all(FLERR, "compute smd/tlsph_kundeg could not access Kundeg tensor. Are the matching pair styles present?");
+		error->all(FLERR, "compute smd/tlsph_k0 could not access K0 tensor. Are the matching pair styles present?");
 	}
 	int nlocal = atom->nlocal;
 	int *mask = atom->mask;
@@ -113,7 +118,7 @@ void ComputeSMDTLSPHKundeg::compute_peratom() {
  memory usage of local atom-based array
  ------------------------------------------------------------------------- */
 
-double ComputeSMDTLSPHKundeg::memory_usage() {
+double ComputeSMDTLSPHK0::memory_usage() {
 	double bytes = size_peratom_cols * nmax * sizeof(double);
 	return bytes;
 }
