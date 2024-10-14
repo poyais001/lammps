@@ -10,7 +10,6 @@
  *
  * ----------------------------------------------------------------------- */
 
-
 /* ----------------------------------------------------------------------
  LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
  https://www.lammps.org/, Sandia National Laboratories
@@ -26,6 +25,7 @@
 
 #include <cstring>
 #include "compute_smd_tlsph_surface_normal.h"
+#include "fix_smd_tlsph_reference_configuration.h"
 #include "atom.h"
 #include "update.h"
 #include "modify.h"
@@ -42,64 +42,72 @@ using namespace LAMMPS_NS;
 /* ---------------------------------------------------------------------- */
 
 ComputeSMDTLSPHSurfaceNormal::ComputeSMDTLSPHSurfaceNormal(LAMMPS *lmp, int narg, char **arg) :
-		Compute(lmp, narg, arg) {
-	if (narg != 3)
-		error->all(FLERR, "Illegal compute smd/tlsph_surface_normal command");
+        Compute(lmp, narg, arg) {
+    if (narg != 3)
+        error->all(FLERR, "Illegal compute smd/tlsph_surface_normal command");
 
-	peratom_flag = 1;
-	size_peratom_cols = 3;
+    peratom_flag = 1;
+    size_peratom_cols = 3;
 
-	nmax = 0;
-	surface_normal_vector = NULL;
+    nmax = 0;
+    n_array = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
 
 ComputeSMDTLSPHSurfaceNormal::~ComputeSMDTLSPHSurfaceNormal() {
-	memory->sfree(surface_normal_vector);
+    memory->sfree(n_array);
 }
 
 /* ---------------------------------------------------------------------- */
 
 void ComputeSMDTLSPHSurfaceNormal::init() {
 
-	int count = 0;
-	for (int i = 0; i < modify->ncompute; i++)
-		if (strcmp(modify->compute[i]->style, "smd/tlsph_surface_normal") == 0)
-			count++;
-	if (count > 1 && comm->me == 0)
-		error->warning(FLERR, "More than one compute smd/tlsph_surface_normal");
+    int count = 0;
+    for (int i = 0; i < modify->ncompute; i++)
+        if (strcmp(modify->compute[i]->style, "smd/tlsph_surface_normal") == 0)
+            count++;
+    if (count > 1 && comm->me == 0)
+        error->warning(FLERR, "More than one compute smd/tlsph_surface_normal");
 }
 
 /* ---------------------------------------------------------------------- */
 
 void ComputeSMDTLSPHSurfaceNormal::compute_peratom() {
-	invoked_peratom = update->ntimestep;
+    invoked_peratom = update->ntimestep;
 
-	// grow vector array if necessary
+    // grow vector array if necessary
 
-	if (atom->nmax > nmax) {
-		memory->destroy(surface_normal_vector);
-		nmax = atom->nmax;
-		memory->create(surface_normal_vector, nmax, size_peratom_cols, "surfaceNormalVector");
-		array_atom = surface_normal_vector;
-	}
+    if (atom->nmax > nmax) {
+        memory->destroy(n_array);
+        nmax = atom->nmax;
+        memory->create(n_array, nmax, size_peratom_cols, "surfacenormaltensorVector");
+        array_atom = n_array;
+    }
 
-	int itmp = 0;
-	Vector3d *N = (Vector3d *) force->pair->extract("smd/tlsph/surfaceNormal_ptr", itmp);
-	if (N == NULL) {
-		error->all(FLERR,
-				"compute smd/tlsph_surface_normal could not access surface normal. Are the matching pair styles present?");
-	}
+    int itmp = 0;
+    int ifix_tlsph;
+    for (int i = 0; i < modify->nfix; i++)
+        if (strcmp(modify->fix[i]->style, "SMD_TLSPH_NEIGHBORS") == 0)
+            ifix_tlsph = i;
+    Vector3d *T = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>( modify->fix[ifix_tlsph]))->sNormal;
+    if (T == NULL) {
+        error->all(FLERR, "compute smd/tlsph_surface_normal could not access surface_normal tensor. Are the matching pair styles present?");
+    }
+    int nlocal = atom->nlocal;
+    int *mask = atom->mask;
 
-	int nlocal = atom->nlocal;
-
-	for (int i = 0; i < nlocal; i++) {
-
-		surface_normal_vector[i][0] = N[i](0); // x
-		surface_normal_vector[i][1] = N[i](1); // y
-		surface_normal_vector[i][2] = N[i](2); // z
-	}
+    for (int i = 0; i < nlocal; i++) {
+        if (mask[i] & groupbit) {
+            n_array[i][0] = T[i](0); // xx
+            n_array[i][1] = T[i](1); // yy
+            n_array[i][2] = T[i](2); // zz
+        } else {
+            for (int j = 0; j < size_peratom_cols; j++) {
+                n_array[i][j] = 0.0;
+            }
+        }
+    }
 }
 
 /* ----------------------------------------------------------------------
@@ -107,6 +115,6 @@ void ComputeSMDTLSPHSurfaceNormal::compute_peratom() {
  ------------------------------------------------------------------------- */
 
 double ComputeSMDTLSPHSurfaceNormal::memory_usage() {
-	double bytes = size_peratom_cols * nmax * sizeof(double);
-	return bytes;
+    double bytes = size_peratom_cols * nmax * sizeof(double);
+    return bytes;
 }

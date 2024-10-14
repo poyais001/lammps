@@ -73,9 +73,6 @@ class PairTlsph : public Pair {
                      Eigen::Matrix3d &sigma_damaged, double plastic_strain_increment);
   void UpdateDegradation();
   void AdjustStressForZeroForceBC(const Eigen::Matrix3d sigma, const Eigen::Vector3d sU, Eigen::Matrix3d &sigmaBC);
-  Eigen::Vector3d ComputeFstress(const int i, const int j, const int jj, const double surfaceNormalNormi, 
-                                 const Eigen::Vector3d dx0, const double r0, const Eigen::Vector3d g, 
-                                 const Eigen::Matrix3d sigmaBC_i, const double scale, const double strain1d = 1.0);
   double CalculateScale(const float degradation, const int itype);
 
 
@@ -84,20 +81,19 @@ class PairTlsph : public Pair {
   char *suffix;
 
   /*
-         * per-type arrays
-         */
+   * per-type arrays
+   */
   int *strengthModel, *eos;
   double *onerad_dynamic, *onerad_frozen, *maxrad_dynamic, *maxrad_frozen;
 
   /*
-         * per atom arrays
-         */
-  Eigen::Matrix3d *K, *Kundeg, *PK1, *Fdot, *Fincr;
+   * per atom arrays
+   */
+  Eigen::Matrix3d *K, *PK1, *Fdot, *Fincr;
   Eigen::Matrix3d *R;    // rotation matrix
   Eigen::Matrix3d *FincrInv;
   Eigen::Matrix3d *D, *W;    // strain rate and spin tensor
   Eigen::Vector3d *smoothVelDifference;
-  Eigen::Vector3d *surfaceNormal; // Vector normal to the boundary pointing outwards
   Eigen::Matrix3d *CauchyStress;
   double *detF, *particle_dt;
   double *vij_max;
@@ -108,7 +104,7 @@ class PairTlsph : public Pair {
   double hMin;    // minimum kernel radius for two particles
   double dtCFL;
   double dtRelative;    // relative velocity of two particles, divided by sound speed
-  int updateFlag, updateKundegFlag, updateSurfaceNormal;
+  int updateFlag;
   double update_threshold;    // updateFlage is set to one if the relative displacement of a pair exceeds update_threshold
   double cut_comm;
 

@@ -67,7 +67,7 @@ class FixSMD_TLSPH_ReferenceConfiguration : public Fix {
   bool get_line_intersection(int i, int j);
 
   Eigen::Matrix3d *K0; // correction matrix in the original configuration
-  Eigen::Vector3d *normal; // Vector normal to the boundary pointing outwards
+  Eigen::Vector3d *sNormal; // Vector normal to the boundary pointing outwards
 
  protected:
   int updateFlag;    // flag to update reference configuration

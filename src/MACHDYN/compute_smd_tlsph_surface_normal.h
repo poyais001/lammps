@@ -24,7 +24,7 @@
 
 #ifdef COMPUTE_CLASS
 // clang-format off
-ComputeStyle(smd/tlsph/surfacenormal,ComputeSMDTLSPHSurfaceNormal)
+ComputeStyle(smd/tlsph/surface/normal,ComputeSMDTLSPHSurfaceNormal)
 // clang-format on
 #else
 
@@ -45,7 +45,7 @@ class ComputeSMDTLSPHSurfaceNormal : public Compute {
 
  private:
   int nmax;
-  double **surface_normal_vector;
+  double **n_array;
 };
 
 }    // namespace LAMMPS_NS

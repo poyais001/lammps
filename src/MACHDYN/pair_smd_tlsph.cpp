@@ -106,11 +106,10 @@ PairTlsph::PairTlsph(LAMMPS *lmp) :
   strengthModel = eos = nullptr;
 
   nmax = 0; // make sure no atom on this proc such that initial memory allocation is correct
-  Fdot = Fincr = K = Kundeg = PK1 = nullptr;
+  Fdot = Fincr = K = PK1 = nullptr;
   R = FincrInv = W = D = nullptr;
   detF = nullptr;
   smoothVelDifference = nullptr;
-  surfaceNormal = nullptr;
   numNeighsRefConfig = nullptr;
   CauchyStress = nullptr;
   hourglass_error = nullptr;
@@ -119,8 +118,6 @@ PairTlsph::PairTlsph(LAMMPS *lmp) :
   vij_max = nullptr;
 
   updateFlag = 0;
-  updateKundegFlag = 1;
-  updateSurfaceNormal = 1;
   first = true;
   dtCFL = 0.0; // initialize dtCFL so it is set to safe value if extracted on zero-th timestep
 
@@ -149,11 +146,9 @@ PairTlsph::~PairTlsph() {
     delete[] Fdot;
     delete[] Fincr;
     delete[] K;
-    delete[] Kundeg;
     delete[] detF;
     delete[] PK1;
     delete[] smoothVelDifference;
-    delete[] surfaceNormal;
     delete[] R;
     delete[] FincrInv;
     delete[] W;
@@ -208,9 +203,6 @@ void PairTlsph::PreCompute() {
 
   dtCFL = 1.0e22;
   eye.setIdentity();
-
-  if (updateKundegFlag == 1)
-    printf("updateKundegFlag == 1\n");
   for (i = 0; i < nlocal; i++) {
     vij_max[i] = 0.0;
 
@@ -233,12 +225,10 @@ void PairTlsph::PreCompute() {
     if (setflag[itype][itype] == 1) {
 
       K[i].setZero();
-      if (updateKundegFlag == 1) Kundeg[i].setZero();
       Fincr[i].setZero();
       Fdot[i].setZero();
       numNeighsRefConfig[i] = 0;
       smoothVelDifference[i].setZero();
-      if (updateSurfaceNormal == 1) surfaceNormal[i].setZero();
       hourglass_error[i] = 0.0;
 
       if (mol[i] < 0) { // valid SPH particle have mol > 0
@@ -266,32 +256,12 @@ void PairTlsph::PreCompute() {
       //Matrix3d gradAbsX;
       //gradAbsX.setZero();
       for (jj = 0; jj < jnum; jj++) {
+        
+        if (degradation_ij[i][jj] >= 1.0) continue;
 
-        if (degradation_ij[i][jj] >= 1.0) {  
-          volj = partnervol[i][jj];
-          dx0 = partnerx0[i][jj] - x0i;
-          
-          if (periodic)
-            domain->minimum_image(dx0(0), dx0(1), dx0(2));
-          
-          r0 = dx0.norm();
-          if (updateKundegFlag == 1) Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
-          if (updateSurfaceNormal == 1) surfaceNormal[i].noalias() += volj * wfd_list[i][jj] * dx0;
-          //printf("Link between %d and %d destroyed!\n", tag[i], partner[i][jj]);
-          continue;
-        }
         j = atom->map(partner[i][jj]);
         if (j < 0) { //                 // check if lost a partner without first breaking bond
           printf("Link between %d and %d destroyed without first breaking bond! Damage level in the link was: %f\n", tag[i], partner[i][jj], degradation_ij[i][jj]);
-          volj = partnervol[i][jj];
-          dx0 = partnerx0[i][jj] - x0i;
-          
-          if (periodic)
-            domain->minimum_image(dx0(0), dx0(1), dx0(2));
-          
-          r0 = dx0.norm();
-          if (updateKundegFlag == 1) Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
-          if (updateSurfaceNormal == 1) surfaceNormal[i].noalias() += volj * wfd_list[i][jj] * dx0;
           degradation_ij[i][jj] = 1.0;
           continue;
         }
@@ -354,13 +324,10 @@ void PairTlsph::PreCompute() {
         Ftmp = -(dx - dx0) * g.transpose();
 
         K[i].noalias() += volj * Ktmp;
-        if (updateKundegFlag == 1) Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0 * dx0.transpose();
         Fdot[i].noalias() += volj * Fdottmp;
         Fincr[i].noalias() += volj * Ftmp;
         shepardWeight += volj * wf;
         smoothVelDifference[i].noalias() += volj * wf * dvint;
-
-        if (updateSurfaceNormal == 1) surfaceNormal[i].noalias() += volj * wfd_list[i][jj] * dx0;
 
         numNeighsRefConfig[i]++;
       } // end loop over j
@@ -374,88 +341,9 @@ void PairTlsph::PreCompute() {
       }
 
       pseudo_inverse_SVD(K[i]);
-      if (updateKundegFlag == 1) {
-        Matrix3d KundegINV;
-        KundegINV = Kundeg[i];
-        pseudo_inverse_SVD(KundegINV);
-        surfaceNormal[i] = KundegINV * surfaceNormal[i];
-      } else {
-        if (updateSurfaceNormal == 1) surfaceNormal[i] = Kundeg[i] * surfaceNormal[i];
-      }
       Fdot[i] *= K[i];
       Fincr[i] *= K[i];
       Fincr[i].noalias() += eye;
-
-      // START
-      if (updateKundegFlag == 1) {
-      // Recalculate Kundeg to include mirror particles:
-      
-      surfaceNormalNormi = surfaceNormal[i].norm();
-      //Vector3d sU;
-      //sU = surfaceNormal[i] / surfaceNormalNormi;
-
-      if (surfaceNormalNormi > 0.75) {
-        surfaceNormal[i] /= surfaceNormalNormi;
-        
-        for (jj = 0; jj < jnum; jj++) {
-          
-          if (degradation_ij[i][jj] >= 1.0) 
-          {
-            volj = partnervol[i][jj];
-            dx0 = partnerx0[i][jj] - x0i;
-            
-            if (periodic)
-              domain->minimum_image(dx0(0), dx0(1), dx0(2));
-
-            if (surfaceNormal[i].dot(dx0) > -0.5*pow(volj, 1.0/3.0)) {
-              continue;
-            }
-
-            dx0mirror = dx0 - 2 * (dx0.dot(surfaceNormal[i])) * surfaceNormal[i];
-            r0 = dx0.norm();
-            Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0mirror * dx0mirror.transpose();
-            continue;
-          }
-          j = atom->map(partner[i][jj]);
-          if (j < 0) { //      // check if lost a partner without first breaking bond
-            error->all(FLERR, "Bond broken not detected during PreCompute - 1!");
-            continue;
-          }
-          
-          if (mol[j] < 0) { // particle has failed. do not include it for computing any property
-            continue;
-          }
-          
-          if (mol[i] != mol[j]) {
-            continue;
-          }
-                    
-          // initialize Eigen data structures from LAMMPS data structures
-          for (idim = 0; idim < 3; idim++) {
-            x0j(idim) = x0[j][idim];
-          }
-          dx0 = x0j - x0i;
-          
-          if (periodic)
-            domain->minimum_image(dx0(0), dx0(1), dx0(2));
-          
-          if (surfaceNormal[i].dot(dx0) > -0.5*pow(volj, 1.0/3.0)) {
-            continue;
-          }
-          
-          dx0mirror = dx0 - 2 * (dx0.dot(surfaceNormal[i])) * surfaceNormal[i];
-          r0 = dx0.norm();
-          volj = vfrac[j];
-          
-          Kundeg[i].noalias() -= volj * (wfd_list[i][jj] / r0) * dx0mirror * dx0mirror.transpose();
-        }
-        
-      } else {
-        surfaceNormal[i].setZero();
-      }
-      // END RECALCULATE Kundeg
-      pseudo_inverse_SVD(Kundeg[i]);
-      }
 
       if (JAUMANN) {
         R[i].setIdentity(); // for Jaumann stress rate, we do not need a subsequent rotation back into the reference configuration
@@ -512,7 +400,6 @@ void PairTlsph::PreCompute() {
         smoothVelDifference[i].setZero();
         detF[i] = 1.0;
         K[i].setIdentity();
-        Kundeg[i].setIdentity();
 
         vint[i][0] = 0.0;
         vint[i][1] = 0.0;
@@ -520,8 +407,6 @@ void PairTlsph::PreCompute() {
       }
     } // end check setflag 
   } // end loop over i
-  updateKundegFlag = 0;
-  updateSurfaceNormal = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -536,16 +421,12 @@ void PairTlsph::compute(int eflag, int vflag) {
     Fincr = new Matrix3d[nmax]; // memory usage: 9 doubles
     delete[] K;
     K = new Matrix3d[nmax]; // memory usage: 9 doubles
-    delete[] Kundeg;
-    Kundeg = new Matrix3d[nmax]; // memory usage: 9 doubles
     delete[] PK1;
     PK1 = new Matrix3d[nmax]; // memory usage: 9 doubles; total 5*9=45 doubles
     delete[] detF;
     detF = new double[nmax]; // memory usage: 1 double; total 46 doubles
     delete[] smoothVelDifference;
     smoothVelDifference = new Vector3d[nmax]; // memory usage: 3 doubles; total 49 doubles
-    delete[] surfaceNormal;
-    surfaceNormal = new Vector3d[nmax]; // memory usage: 3 doubles; total 49 doubles
     delete[] R;
     R = new Matrix3d[nmax]; // memory usage: 9 doubles; total 67 doubles
     delete[] FincrInv;
@@ -643,6 +524,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
   double **partnervol = (dynamic_cast<FixSMD_TLSPH_ReferenceConfiguration *>(modify->fix[ifix_tlsph]))->partnervol;
   Matrix3d eye;
   Vector3d sU, sV, sW;
+  Matrix3d *K0 = ((FixSMD_TLSPH_ReferenceConfiguration *) modify->fix[ifix_tlsph])->K0;
   eye.setIdentity();
 
   ev_init(eflag, vflag);
@@ -741,13 +623,13 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
       
       // What is required is to build a basis with surfaceNormal as one of the vectors:
 
-      f_stress = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (Kundeg[i] * g);
+      f_stress = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (K0[i] * g);
 
       if (f_stress.norm() > 0.8){
         printf("f_stress[%d][%d] > 0.8 with f = [%f %f %f]\n", tag[i], tag[j], f_stress[0], f_stress[1], f_stress[2]);
-        Vector3d fij = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (Kundeg[i] * g);
+        Vector3d fij = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (K0[i] * g);
         printf("fij = [%f %f %f]\n", fij[0], fij[1], fij[2]);
-        std::cout << "Here is Kundeg[i]:" << std::endl << Kundeg[i] << std::endl; 
+        std::cout << "Here is K0[i]:" << std::endl << K0[i] << std::endl; 
       }
 
       energy_per_bond[i][jj] = f_stress.dot(dx); // THIS IS NOT THE ENERGY PER BOND, I AM USING THIS VARIABLE TO STORE THIS VALUE TEMPORARILY
@@ -1045,7 +927,6 @@ void PairTlsph::AssembleStress() {
       } else { // end if mol > 0
         PK1[i].setZero();
         K[i].setIdentity();
-        Kundeg[i].setIdentity();
         CauchyStress[i].setZero();
         sigma_rate.setZero();
         tlsph_stress[i][0] = 0.0;
@@ -1870,12 +1751,8 @@ void *PairTlsph::extract(const char *str, int &/*i*/) {
     return (void *) detF;
   } else if (strcmp(str, "smd/tlsph/PK1_ptr") == 0) {
     return (void *) PK1;
-  } else if (strcmp(str, "smd/tlsph/Kundeg_ptr") == 0) {
-    return (void *) Kundeg;
   } else if (strcmp(str, "smd/tlsph/smoothVel_ptr") == 0) {
     return (void *) smoothVelDifference;
-  } else if (strcmp(str, "smd/tlsph/surfaceNormal_ptr") == 0) {
-    return (void *) surfaceNormal;
   } else if (strcmp(str, "smd/tlsph/numNeighsRefConfig_ptr") == 0) {
     return (void *) numNeighsRefConfig;
   } else if (strcmp(str, "smd/tlsph/stressTensor_ptr") == 0) {
@@ -2420,64 +2297,4 @@ double PairTlsph::CalculateScale(const float degradation, const int itype) {
   } else {
     return 1.0 - degradation;
   }
-}
-
-Vector3d PairTlsph::ComputeFstress(const int i, const int j, const int jj, const double surfaceNormalNormi, const Vector3d dx0, const double r0, const Vector3d g, const Matrix3d sigmaBC_i, const double scale, const double strain1d) {
-  double *vfrac = atom->vfrac;
-  float **wfd_list = ((FixSMD_TLSPH_ReferenceConfiguration *) modify->fix[ifix_tlsph])->wfd_list;
-  double voli, volj;
-  Matrix3d sigmaInternalBC;
-  Vector3d fij, eij, compForce, shearForce;
-
-  voli = vfrac[i];
-  volj = vfrac[j];
-
-  eij = dx0/r0;
-
-  if (strain1d > 0.0) {
-    // The bond ij is in tension, the whole contribution needs to be scaled
-    if (scale == 0.0) {
-      fij = PK1[i] * Kundeg[i] * g;
-    } else {
-      fij = (scale * PK1[j] + PK1[i]) * Kundeg[i] * g; 
-    }
-  } else {
-    fij = PK1[j] * Kundeg[i] * g;
-    
-    if (scale < 1.0) {
-      // The bond ij is in compression, only shear forces need to be scaled:
-      
-      Matrix3d P = CreateOrthonormalBasisFromOneVector(dx0);
-      Vector3d sU = P.col(0);
-      Vector3d sV = P.col(1);
-      Vector3d sW = P.col(2);
-      
-      compForce = fij.dot(sU) * sU;
-      shearForce = ( fij.dot(sV) * sV + fij.dot(sW) * sW)*scale;
-      if (abs(compForce.dot(shearForce)) > 1.0e-10) {
-        printf("compForce and shearForce should be orthogonal.");
-        std::cout << "Here is P:" << std::endl << P << std::endl;
-        std::cout << "sU.sV = " << sU.dot(sV) << std::endl;
-        std::cout <<"sU.sW = " << sU.dot(sW) << std::endl;
-        std::cout <<"sV.sW = " << sV.dot(sW) << std::endl;
-        std::cout << "Here is compForce: " << std::endl << compForce << std::endl;
-        std::cout << "Here is shearForce: " << std::endl << shearForce << std::endl;
-        std::cout << "compForce dot shearForce =  " << compForce.dot(shearForce) << std::endl;
-        //error->all(FLERR, "Error. compForce and shearForce should be orthogonal.");
-      }
-      fij = compForce + shearForce;
-    }
-    fij += PK1[i]*Kundeg[i]*g;
-    
-  }
-  
-  
-  if ((surfaceNormalNormi > 0.5) && (surfaceNormal[i].dot(dx0) <= -0.5*pow(volj, 1.0/3.0))) {
-    // i is a surface particle, and j is in the bulk.
-    Vector3d dx0mirror = dx0 - 2 * (dx0.dot(surfaceNormal[i])) * surfaceNormal[i];
-    //fij += (PK1[i] - sigmaBC_i) * Kundeg[i] * (wfd_list[i][jj] / r0) * dx0mirror; // Contribution of the virtual mirror particle (is not affected by damage!)
-    fij += PK1[i] * Kundeg[i] * (wfd_list[i][jj] / r0) * dx0mirror; // Contribution of the virtual mirror particle (is not affected by damage!)
-  }
-  return -voli * volj * fij;
-  
 }
