@@ -2220,7 +2220,7 @@ void PairTlsph::ComputeStressDeviator(const int i, const double mass_specific_en
     if (failureModel[itype].failure_gtn)
       GTNStrength(Lookup[SHEAR_MODULUS][itype], Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype],
                   dt, damage[i], sigmaInitial_dev, d_dev, pFinal, yieldStress,
-                  sigmaFinal_dev__, sigma_dev_rate__, plastic_strain_increment);
+                  sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment);
     else 
       LinearPlasticStrength(Lookup[SHEAR_MODULUS][itype], yieldStress, sigmaInitial_dev, d_dev, dt, 
                             sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment, damage[i]);
@@ -2230,7 +2230,7 @@ void PairTlsph::ComputeStressDeviator(const int i, const double mass_specific_en
     if (failureModel[itype].failure_gtn)
       GTNStrength(Lookup[SHEAR_MODULUS][itype], Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype],
                   dt, damage[i], sigmaInitial_dev, d_dev, pFinal, yieldStress,
-                  sigmaFinal_dev__, sigma_dev_rate__, plastic_strain_increment);
+                  sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment);
     else
       LinearPlasticStrength(Lookup[SHEAR_MODULUS][itype], yieldStress, sigmaInitial_dev, d_dev, dt, 
                             sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment, damage[i]);
@@ -2240,7 +2240,7 @@ void PairTlsph::ComputeStressDeviator(const int i, const double mass_specific_en
     if (failureModel[itype].failure_gtn)
       GTNStrength(Lookup[SHEAR_MODULUS][itype], Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype],
                   dt, damage[i], sigmaInitial_dev, d_dev, pFinal, yieldStress,
-                  sigmaFinal_dev__, sigma_dev_rate__, plastic_strain_increment);
+                  sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment);
     else 
       LinearPlasticStrength(Lookup[SHEAR_MODULUS][itype], yieldStress, sigmaInitial_dev, d_dev, dt, 
                             sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment, damage[i]);
