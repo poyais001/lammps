@@ -794,7 +794,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
       }
 
       // scale hourglass force with damage
-      f_hg *= (1.0 - damage[i]) * (1.0 - damage[j]);
+			f_hg *= scale; //(1.0 - damage[i]) * (1.0 - damage[j]);
 
       // sum stress, viscous, and hourglass forces
       sumForces = f_stress + f_visc + f_hg; // + f_spring;
@@ -2296,7 +2296,7 @@ void PairTlsph::ComputeStressDeviator(const int i, const double mass_specific_en
     break;
   case STRENGTH_VOCE:
     yieldStress = Lookup[VOCE_A][itype] - Lookup[VOCE_Q1][itype] * exp(-Lookup[VOCE_n1][itype] * eff_plastic_strain[i])
-      - Lookup[VOCE_Q2][itype] * exp(Lookup[VOCE_n2][itype] * eff_plastic_strain[i]);
+      - Lookup[VOCE_Q2][itype] * exp(-Lookup[VOCE_n2][itype] * eff_plastic_strain[i]);
 
     if ( Lookup[VOCE_C][itype] != 0.0 ) {
       double epdot_ratio = eff_plastic_strain_rate[i] / Lookup[VOCE_epsdot0][itype];
@@ -2310,12 +2310,6 @@ void PairTlsph::ComputeStressDeviator(const int i, const double mass_specific_en
     else
       LinearPlasticStrength(Lookup[SHEAR_MODULUS][itype], yieldStress, sigmaInitial_dev, d_dev, dt, sigmaFinal_dev,
                             sigma_dev_rate, plastic_strain_increment, damage[i]);
-    // if (yieldStress != Lookup[VOCE_A][itype] - Lookup[VOCE_Q1][itype] * exp(-Lookup[VOCE_n1][itype] * eff_plastic_strain[i])
-    //   - Lookup[VOCE_Q2][itype] * exp(Lookup[VOCE_n2][itype] * eff_plastic_strain[i])) {
-    //   cout << "yieldstress = " << yieldStress << endl;
-    //   cout << "sigma0 = " << Lookup[VOCE_A][itype] - Lookup[VOCE_Q1][itype] * exp(-Lookup[VOCE_n1][itype] * eff_plastic_strain[i])
-    //     - Lookup[VOCE_Q2][itype] * exp(Lookup[VOCE_n2][itype] * eff_plastic_strain[i]) << endl;
-    // }
     break;
   case STRENGTH_JOHNSON_COOK:
     JohnsonCookStrength(Lookup[SHEAR_MODULUS][itype], Lookup[HEAT_CAPACITY][itype], mass_specific_energy, Lookup[JC_A][itype],
@@ -2436,9 +2430,6 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
     damage_increment += GTNDamageIncrement(Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype], Lookup[GTN_AN][itype], Lookup[GTN_Komega][itype], pressure,
              stress_deviator, stress, eff_plastic_strain[i], plastic_strain_increment, damage[i], Fdot[i], yieldstress, hM);
     damage[i] += damage_increment;
-    // if (atom->tag[i] == 570) {
-    //   std::cout << "damage[" << atom->tag[i] << "] = " << damage[i] << "\t" << "damage_increment = " << damage_increment << std::endl;
-    // }
   }
 
   damage[i] = MIN(damage[i], 1.0);
