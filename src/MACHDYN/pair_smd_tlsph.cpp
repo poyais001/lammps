@@ -625,13 +625,6 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
 
       f_stress = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (K0[i] * g);
 
-      if (f_stress.norm() > 0.8){
-        printf("f_stress[%d][%d] > 0.8 with f = [%f %f %f]\n", tag[i], tag[j], f_stress[0], f_stress[1], f_stress[2]);
-        Vector3d fij = -(voli * volj * scale) * (PK1[j] + PK1[i]) * (K0[i] * g);
-        printf("fij = [%f %f %f]\n", fij[0], fij[1], fij[2]);
-        std::cout << "Here is K0[i]:" << std::endl << K0[i] << std::endl; 
-      }
-
       energy_per_bond[i][jj] = f_stress.dot(dx); // THIS IS NOT THE ENERGY PER BOND, I AM USING THIS VARIABLE TO STORE THIS VALUE TEMPORARILY
       
       /*
