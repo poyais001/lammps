@@ -682,7 +682,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
       }
 
       // scale hourglass force with damage
-			f_hg *= scale; //(1.0 - damage[i]) * (1.0 - damage[j]);
+      f_hg *= scale; //(1.0 - damage[i]) * (1.0 - damage[j]);
 
       // sum stress, viscous, and hourglass forces
       sumForces = f_stress + f_visc + f_hg; // + f_spring;
@@ -1774,8 +1774,12 @@ void PairTlsph::coeff(int narg, char **arg) {
       if (iNextKwd < 0)
         error->all(FLERR, "no *KEYWORD terminates *GURSON_TVERGAARD_NEEDLEMAN");
 
-      if (iNextKwd - ioffset != 4 + 1)
-        error->all(FLERR, "expected 4 arguments following *GURSON_TVERGAARD_NEEDLEMAN but got {}\n", iNextKwd - ioffset - 1);
+      if (iNextKwd - ioffset != 4 + 1) {
+        if ((iNextKwd - ioffset == 5 + 1) && (strcmp(arg[ioffset + 5], "NO_COUPLING") == 0))
+          failureModel[itype].failure_coupling = false;
+        else
+          error->all(FLERR, "expected 4 arguments following *GURSON_TVERGAARD_NEEDLEMAN but got {}\n", iNextKwd - ioffset - 1);
+      }
 
       failureModel[itype].failure_gtn = true;
       failureModel[itype].integration_point_wise = true;
@@ -1792,6 +1796,8 @@ void PairTlsph::coeff(int narg, char **arg) {
         utils::logmesg(lmp, "{:60} : {}\n", "Q2: ", Lookup[GTN_Q2][itype]);
         utils::logmesg(lmp, "{:60} : {}\n", "An: ", Lookup[GTN_AN][itype]);
         utils::logmesg(lmp, "{:60} : {}\n", "Komega: magnitude of the damage growth rate in pure shear states (from Nahshon and Hutchinson, 2008)", Lookup[GTN_Komega][itype]);
+        if (failureModel[itype].failure_coupling == false)
+          utils::logmesg(lmp, "{:60}\n", "NO COUPLING WITH CONSTITUTIVE LAWS");
       }
 
     } 
@@ -2327,10 +2333,14 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
       break;
     }
 
-    double damage_increment;
-    damage_increment += GTNDamageIncrement(Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype], Lookup[GTN_AN][itype], Lookup[GTN_Komega][itype], pressure,
+    damage_increment = GTNDamageIncrement(Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype], Lookup[GTN_AN][itype], Lookup[GTN_Komega][itype], pressure,
              stress_deviator, stress, eff_plastic_strain[i], plastic_strain_increment, damage[i], Fdot[i], yieldstress, hM);
-    damage[i] += damage_increment;
+    if (failureModel[itype].failure_coupling == true) {
+      damage[i] += damage_increment;
+    } else {
+      damage_init[i] += damage_increment;
+      if (damage_init[i] >= 1.0) damage[i] = 1.0;
+    }
   }
 
   damage[i] = MIN(damage[i], 1.0);
