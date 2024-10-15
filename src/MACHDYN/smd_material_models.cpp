@@ -413,7 +413,7 @@ double GTNStrength(const double G, const double Q1, const double Q2, const doubl
   double J2, yieldStress;
   double Gd = G;
   double f = damage * fcr;
-  if (coupling == true) Gd *= (1-f); 
+  if (coupling == true) Gd *= (1-damage);
   double x = 1.0;
   
   /*
@@ -435,7 +435,6 @@ double GTNStrength(const double G, const double Q1, const double Q2, const doubl
     yieldStress = yieldStress_undamaged;
   } else {
 
-    double Phi; 
     double Q1f = Q1 * f;
     double Q1fSq = Q1f * Q1f;
 
@@ -501,8 +500,6 @@ double GTNStrength(const double G, const double Q1, const double Q2, const doubl
     sigma_dev_rate__ = sigmaFinal_dev__ - sigmaInitial_dev;
     //printf("yielding has occured.\n");
   }
-  
-  plastic_strain_increment *= x/(1 - f);
   
   return yieldStress;
 }
@@ -648,7 +645,7 @@ double GTNDamageIncrement(const double Q1, const double Q2, const double An, con
 
     if ( vm == 0.0 ) return 0.0;
 
-    inverse_sM = yieldstress_undamaged;
+    inverse_sM = 1.0/yieldstress_undamaged;
     J3 = Sdev.determinant();
     //printf("vm = %f, yieldstress_undamaged = %f, J3 = %f\n", vm, yieldstress_undamaged, J3);
 
@@ -673,7 +670,7 @@ double GTNDamageIncrement(const double Q1, const double Q2, const double An, con
 
     tmp1 = -1.5 * Q2 * pressure * inverse_sM;
     sinh_tmp1 = sinh(tmp1);
-    lambda_increment = 0.5 * yieldstress_undamaged * plastic_strain_increment * (1 - f) / (vm * vm * inverse_sM * inverse_sM + Q1 * f * tmp1 * sinh_tmp1);
+    lambda_increment = 0.5 * vm * plastic_strain_increment / (vm * vm * inverse_sM * inverse_sM + Q1 * f * tmp1 * sinh_tmp1);
 
     fs_increment = lambda_increment * f * inverse_sM * ((1 - f) * 3 * Q1 * Q2 * sinh_tmp1 + Komega * omega * 2 * vm * inverse_sM);
 
