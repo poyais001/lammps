@@ -689,7 +689,7 @@ void PairTlsph::ComputeForces(int eflag, int vflag) {
       }
 
       // scale hourglass force with damage
-      f_hg *= (1.0 - damage[i]) * (1.0 - damage[j]);
+			f_hg *= scale; //(1.0 - damage[i]) * (1.0 - damage[j]);
 
       // sum stress, viscous, and hourglass forces
       sumForces = f_stress + f_visc + f_hg; // + f_spring;
@@ -769,7 +769,7 @@ void PairTlsph::AssembleStress() {
   int i, itype, idim;
   int nlocal = atom->nlocal;
   double dt = update->dt;
-  double M_eff, K_eff, mu_eff, p_wave_speed, mass_specific_energy, vol_specific_energy;
+  double M_eff, K_eff, mu_eff, p_wave_speed, mass_specific_energy, vol_specific_energy, yieldstress;
   Matrix3d sigma_rate, eye, sigmaInitial, sigmaFinal, T, T_damaged, Jaumann_rate, sigma_rate_check;
   Matrix3d d_dev, sigmaInitial_dev, sigmaFinal_dev, sigma_dev_rate, strain, deltaSigma;
   Vector3d vi;
@@ -821,7 +821,7 @@ void PairTlsph::AssembleStress() {
          */
 
         //cout << "this is the strain deviator rate" << endl << d_dev << endl;
-        ComputeStressDeviator(i, sigmaInitial_dev, d_dev, sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment);
+        ComputeStressDeviator(i, mass_specific_energy, sigmaInitial_dev, d_dev, sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment, pFinal, yieldstress);
         //cout << "this is the stress deviator rate" << endl << sigma_dev_rate << endl;
 
         // keep a rolling average of the plastic strain rate over the last 100 or so timesteps
@@ -877,7 +877,7 @@ void PairTlsph::AssembleStress() {
          */
 
         if (failureModel[itype].integration_point_wise) {
-          ComputeDamage(i, strain, T, T_damaged, plastic_strain_increment);
+          ComputeDamage(i, strain, T, T_damaged, plastic_strain_increment, yieldstress);
           T = T_damaged;
         }
 
@@ -1280,6 +1280,131 @@ void PairTlsph::coeff(int narg, char **arg) {
         utils::logmesg(lmp, "{:60} : {}\n", "M : exponent for temperature dependency", Lookup[JC_M][itype]);
       }
 
+    } else if (strcmp(arg[ioffset], "*LUDWICK_HOLLOMON") == 0) {
+
+      /*
+       * LUDWICK - HOLLOMON
+       */
+
+      strengthModel[itype] = STRENGTH_LUDWICK_HOLLOMON;
+      if (comm->me == 0) utils::logmesg(lmp, "reading *LUDWICK_HOLLOMON\n");
+
+      t = std::string("*");
+      iNextKwd = -1;
+      for (iarg = ioffset + 1; iarg < narg; iarg++) {
+        s = std::string(arg[iarg]);
+        if (s.compare(0, t.length(), t) == 0) {
+          iNextKwd = iarg;
+          break;
+        }
+      }
+
+      if (iNextKwd < 0) 
+        error->all(FLERR, "no *KEYWORD terminates *LUDWICK_HOLLOMON");
+
+      if (iNextKwd - ioffset != 3 + 1) 
+        error->all(FLERR, "expected 3 arguments following *LUDWICK_HOLLOMON but got {}\n", iNextKwd - ioffset - 1);
+
+      Lookup[LH_A][itype] = utils::numeric(FLERR, arg[ioffset + 1],false,lmp);
+      Lookup[LH_B][itype] = utils::numeric(FLERR, arg[ioffset + 2],false,lmp);
+      Lookup[LH_n][itype] = utils::numeric(FLERR, arg[ioffset + 3],false,lmp);
+
+      if (comm->me == 0) {
+        utils::logmesg(lmp, "Ludwick-Hollomon material strength model\n");
+        utils::logmesg(lmp, "{:60} : {}\n", "A: initial yield stress", Lookup[LH_A][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "B : proportionality factor for plastic strain dependency", Lookup[LH_B][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "n : exponent for plastic strain dependency", Lookup[LH_n][itype]);
+      }
+
+    } else if (strcmp(arg[ioffset], "*SWIFT") == 0) {
+
+      /*
+       * SWIFT
+       */
+
+      strengthModel[itype] = STRENGTH_SWIFT;
+      if (comm->me == 0) utils::logmesg(lmp, "reading *SWIFT\n");
+
+      t = std::string("*");
+      iNextKwd = -1;
+      for (iarg = ioffset + 1; iarg < narg; iarg++) {
+        s = std::string(arg[iarg]);
+        if (s.compare(0, t.length(), t) == 0) {
+          iNextKwd = iarg;
+          break;
+        }
+      }
+
+      if (iNextKwd < 0) 
+        error->all(FLERR, "no *KEYWORD terminates *SWIFT");
+
+      if (iNextKwd - ioffset != 4 + 1) 
+        error->all(FLERR, "expected 4 arguments following *SWIFT but got {}\n", iNextKwd - ioffset - 1);
+
+      Lookup[SWIFT_A][itype] = utils::numeric(FLERR, arg[ioffset + 1],false,lmp);
+      Lookup[SWIFT_B][itype] = utils::numeric(FLERR, arg[ioffset + 2],false,lmp);
+      Lookup[SWIFT_n][itype] = utils::numeric(FLERR, arg[ioffset + 3],false,lmp);
+      Lookup[SWIFT_eps0][itype] = utils::numeric(FLERR, arg[ioffset + 4],false,lmp);
+
+      if (Lookup[SWIFT_eps0][itype] < 0.0)
+        error->all(FLERR, "the 4th argument following *SWIFT should be positive");
+
+      if (comm->me == 0) {
+        utils::logmesg(lmp, "Swift material strength model\n");
+        utils::logmesg(lmp, "{:60} : {}\n", "A: initial yield stress", Lookup[SWIFT_A][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "B : proportionality factor for plastic strain dependency", Lookup[SWIFT_B][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "n : exponent for plastic strain dependency", Lookup[SWIFT_n][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "eps0 : initial plastic strain", Lookup[SWIFT_eps0][itype]);
+      }
+
+    }  else if (strcmp(arg[ioffset], "*VOCE") == 0) {
+
+      /*
+       * VOCE
+       */
+
+      strengthModel[itype] = STRENGTH_VOCE;
+      if (comm->me == 0) utils::logmesg(lmp, "reading *VOCE\n");
+
+      t = std::string("*");
+      iNextKwd = -1;
+      for (iarg = ioffset + 1; iarg < narg; iarg++) {
+        s = std::string(arg[iarg]);
+        if (s.compare(0, t.length(), t) == 0) {
+          iNextKwd = iarg;
+          break;
+        }
+      }
+
+      if (iNextKwd < 0)
+        error->all(FLERR, "no *KEYWORD terminates *VOCE");
+
+      if (iNextKwd - ioffset != 7 + 1)
+        error->all(FLERR, "expected 7 arguments following *VOCE but got {}\n", iNextKwd - ioffset - 1);
+
+      Lookup[VOCE_A][itype] = utils::numeric(FLERR, arg[ioffset + 1],false,lmp);
+      Lookup[VOCE_Q1][itype] = utils::numeric(FLERR, arg[ioffset + 2],false,lmp);
+      Lookup[VOCE_n1][itype] = utils::numeric(FLERR, arg[ioffset + 3],false,lmp);
+      Lookup[VOCE_Q2][itype] = utils::numeric(FLERR, arg[ioffset + 4],false,lmp);
+      Lookup[VOCE_n2][itype] = utils::numeric(FLERR, arg[ioffset + 5],false,lmp);
+      Lookup[VOCE_C][itype] = utils::numeric(FLERR, arg[ioffset + 6],false,lmp);
+      Lookup[VOCE_epsdot0][itype] = utils::numeric(FLERR, arg[ioffset + 7],false,lmp);
+
+      if (comm->me == 0) {
+        utils::logmesg(lmp, "Swift strength model\n");
+        utils::logmesg(lmp, "{:60} : {}\n", "initial yield stress A", Lookup[VOCE_A][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "Q1", Lookup[VOCE_Q1][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "n1", Lookup[VOCE_n1][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "Q2", Lookup[VOCE_Q2][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "n2", Lookup[VOCE_n2][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "proportionality factor for logarithmic plastic strain rate dependency C", Lookup[VOCE_C][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "dimensionality factor for plastic strain rate dependency epsdot0", Lookup[VOCE_epsdot0][itype]);
+      }
+      
+      if (Lookup[VOCE_A][itype] - Lookup[VOCE_Q1][itype] - Lookup[VOCE_Q2][itype]  < 0.0 ) {
+        error->all(FLERR, "(A - Q1 - Q2) cannot be negative but got {}\n", Lookup[VOCE_A][itype] - Lookup[VOCE_Q1][itype] - Lookup[VOCE_Q2][itype]);
+      }
+
     } else if (strcmp(arg[ioffset], "*EOS_NONE") == 0) {
 
       /*
@@ -1635,6 +1760,49 @@ void PairTlsph::coeff(int narg, char **arg) {
       }
     } // end energy release rate failure criterion
 
+    else if (strcmp(arg[ioffset], "*GURSON_TVERGAARD_NEEDLEMAN") == 0) {
+
+      /*
+       * GURSON - TVERGAARD - NEEDLEMAN Model
+       */
+      
+      if (comm->me == 0) utils::logmesg(lmp, "reading *GURSON_TVERGAARD_NEEDLEMAN\n");
+
+      t = std::string("*");
+      iNextKwd = -1;
+      for (iarg = ioffset + 1; iarg < narg; iarg++) {
+        s = std::string(arg[iarg]);
+        if (s.compare(0, t.length(), t) == 0) {
+          iNextKwd = iarg;
+          break;
+        }
+      }
+
+      if (iNextKwd < 0)
+        error->all(FLERR, "no *KEYWORD terminates *GURSON_TVERGAARD_NEEDLEMAN");
+
+      if (iNextKwd - ioffset != 4 + 1)
+        error->all(FLERR, "expected 4 arguments following *GURSON_TVERGAARD_NEEDLEMAN but got {}\n", iNextKwd - ioffset - 1);
+
+      failureModel[itype].failure_gtn = true;
+      failureModel[itype].integration_point_wise = true;
+      failureModel[itype].failure_none = false;
+      
+      Lookup[GTN_Q1][itype] = utils::numeric(FLERR, arg[ioffset + 1],false,lmp);
+      Lookup[GTN_Q2][itype] = utils::numeric(FLERR, arg[ioffset + 2],false,lmp);
+      Lookup[GTN_AN][itype] = utils::numeric(FLERR, arg[ioffset + 3],false,lmp);
+      Lookup[GTN_Komega][itype] = utils::numeric(FLERR, arg[ioffset + 4],false,lmp);
+
+      if (comm->me == 0) {
+        utils::logmesg(lmp, "\nGurson-Tvergaard-Needleman failure criterion\n");
+        utils::logmesg(lmp, "{:60} : {}\n", "Q1: ", Lookup[GTN_Q1][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "Q2: ", Lookup[GTN_Q2][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "An: ", Lookup[GTN_AN][itype]);
+        utils::logmesg(lmp, "{:60} : {}\n", "Komega: magnitude of the damage growth rate in pure shear states (from Nahshon and Hutchinson, 2008)", Lookup[GTN_Komega][itype]);
+      }
+
+    } 
+
     else error->all(FLERR, "unknown *KEYWORD: {}", arg[ioffset]);
   }
   setflag[itype][itype] = 1;
@@ -1936,7 +2104,11 @@ void PairTlsph::ComputePressure(const int i, const double rho, const double mass
 
   switch (eos[itype]) {
   case EOS_LINEAR:
-    LinearEOS(Lookup[BULK_MODULUS][itype], pInitial, d_iso, dt, pFinal, p_rate);
+    if ((failureModel[itype].integration_point_wise == true) && (damage[i] > 0.0)){
+      LinearEOSwithDamage(rho, Lookup[REFERENCE_DENSITY][itype], Lookup[BULK_MODULUS][itype], pInitial, dt, pFinal, p_rate, damage[i]);
+    } else {
+      LinearEOS(Lookup[BULK_MODULUS][itype], pInitial, d_iso, dt, pFinal, p_rate);
+    }
     break;
   case EOS_NONE:
     pFinal = 0.0;
@@ -1951,7 +2123,7 @@ void PairTlsph::ComputePressure(const int i, const double rho, const double mass
     polynomialEOS(rho, Lookup[REFERENCE_DENSITY][itype], vol_specific_energy, Lookup[EOS_POLYNOMIAL_C0][itype],
                   Lookup[EOS_POLYNOMIAL_C1][itype], Lookup[EOS_POLYNOMIAL_C2][itype], Lookup[EOS_POLYNOMIAL_C3][itype],
                   Lookup[EOS_POLYNOMIAL_C4][itype], Lookup[EOS_POLYNOMIAL_C5][itype], Lookup[EOS_POLYNOMIAL_C6][itype], pInitial, dt,
-                  pFinal, p_rate);
+                  pFinal, p_rate, damage[i]);
 
     break;
   default:
@@ -1963,19 +2135,17 @@ void PairTlsph::ComputePressure(const int i, const double rho, const double mass
 /* ----------------------------------------------------------------------
  Compute stress deviator. Called from AssembleStress().
  ------------------------------------------------------------------------- */
-void PairTlsph::ComputeStressDeviator(const int i, const Matrix3d& sigmaInitial_dev, const Matrix3d& d_dev, Matrix3d &sigmaFinal_dev,
-                                      Matrix3d &sigma_dev_rate, double &plastic_strain_increment) {
+void PairTlsph::ComputeStressDeviator(const int i, const double mass_specific_energy, const Matrix3d& sigmaInitial_dev, const Matrix3d& d_dev, 
+                                      Matrix3d &sigmaFinal_dev, Matrix3d &sigma_dev_rate, double &plastic_strain_increment, const double pFinal, double &yieldStress) {
   double *eff_plastic_strain = atom->eff_plastic_strain;
   double *eff_plastic_strain_rate = atom->eff_plastic_strain_rate;
   int *type = atom->type;
   double *rmass = atom->rmass;
   double *esph = atom->esph;
   double dt = update->dt;
-  double yieldStress;
   int itype;
   double *damage = atom->damage;
 
-  double mass_specific_energy = esph[i] / rmass[i]; // energy per unit mass
   plastic_strain_increment = 0.0;
   itype = type[i];
 
@@ -1995,10 +2165,51 @@ void PairTlsph::ComputeStressDeviator(const int i, const Matrix3d& sigmaInitial_
     R[i].setIdentity();
     break;
   case STRENGTH_LINEAR_PLASTIC:
-
     yieldStress = Lookup[YIELD_STRESS][itype] + Lookup[HARDENING_PARAMETER][itype] * eff_plastic_strain[i];
-    LinearPlasticStrength(Lookup[SHEAR_MODULUS][itype], yieldStress, sigmaInitial_dev, d_dev, dt, sigmaFinal_dev,
-                          sigma_dev_rate, plastic_strain_increment, damage[i]);
+    if (failureModel[itype].failure_gtn)
+      GTNStrength(Lookup[SHEAR_MODULUS][itype], Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype],
+                  dt, damage[i], sigmaInitial_dev, d_dev, pFinal, yieldStress,
+                  sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment);
+    else 
+      LinearPlasticStrength(Lookup[SHEAR_MODULUS][itype], yieldStress, sigmaInitial_dev, d_dev, dt, 
+                            sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment, damage[i]);
+    break;
+  case STRENGTH_LUDWICK_HOLLOMON:
+    yieldStress = Lookup[LH_A][itype] + Lookup[LH_B][itype] * pow(eff_plastic_strain[i], Lookup[LH_n][itype]);
+    if (failureModel[itype].failure_gtn)
+      GTNStrength(Lookup[SHEAR_MODULUS][itype], Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype],
+                  dt, damage[i], sigmaInitial_dev, d_dev, pFinal, yieldStress,
+                  sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment);
+    else
+      LinearPlasticStrength(Lookup[SHEAR_MODULUS][itype], yieldStress, sigmaInitial_dev, d_dev, dt, 
+                            sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment, damage[i]);
+    break;
+  case STRENGTH_SWIFT:
+    yieldStress = Lookup[SWIFT_A][itype] + Lookup[SWIFT_B][itype] * pow(eff_plastic_strain[i] + Lookup[SWIFT_eps0][itype], Lookup[SWIFT_n][itype]);
+    if (failureModel[itype].failure_gtn)
+      GTNStrength(Lookup[SHEAR_MODULUS][itype], Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype],
+                  dt, damage[i], sigmaInitial_dev, d_dev, pFinal, yieldStress,
+                  sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment);
+    else 
+      LinearPlasticStrength(Lookup[SHEAR_MODULUS][itype], yieldStress, sigmaInitial_dev, d_dev, dt, 
+                            sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment, damage[i]);
+    break;
+  case STRENGTH_VOCE:
+    yieldStress = Lookup[VOCE_A][itype] - Lookup[VOCE_Q1][itype] * exp(-Lookup[VOCE_n1][itype] * eff_plastic_strain[i])
+      - Lookup[VOCE_Q2][itype] * exp(-Lookup[VOCE_n2][itype] * eff_plastic_strain[i]);
+
+    if ( Lookup[VOCE_C][itype] != 0.0 ) {
+      double epdot_ratio = eff_plastic_strain_rate[i] / Lookup[VOCE_epsdot0][itype];
+      epdot_ratio = MAX(epdot_ratio, 1.0);
+      yieldStress *= 1.0 + Lookup[VOCE_C][itype] * log(epdot_ratio);
+    }
+    if (failureModel[itype].failure_gtn)
+      GTNStrength(Lookup[SHEAR_MODULUS][itype], Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype],
+                  dt, damage[i], sigmaInitial_dev, d_dev, pFinal, yieldStress,
+                  sigmaFinal_dev, sigma_dev_rate, plastic_strain_increment);
+    else
+      LinearPlasticStrength(Lookup[SHEAR_MODULUS][itype], yieldStress, sigmaInitial_dev, d_dev, dt, sigmaFinal_dev,
+                            sigma_dev_rate, plastic_strain_increment, damage[i]);
     break;
   case STRENGTH_JOHNSON_COOK:
     JohnsonCookStrength(Lookup[SHEAR_MODULUS][itype], Lookup[HEAT_CAPACITY][itype], mass_specific_energy, Lookup[JC_A][itype],
@@ -2020,7 +2231,7 @@ void PairTlsph::ComputeStressDeviator(const int i, const Matrix3d& sigmaInitial_
 /* ----------------------------------------------------------------------
  Compute damage. Called from AssembleStress().
  ------------------------------------------------------------------------- */
-void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3d& stress, Matrix3d &stress_damaged, double plastic_strain_increment) {
+void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3d& stress, Matrix3d &stress_damaged, double plastic_strain_increment, const double yieldstress) {
   double *eff_plastic_strain = atom->eff_plastic_strain;
   double *eff_plastic_strain_rate = atom->eff_plastic_strain_rate;
   double *radius = atom->radius;
@@ -2063,7 +2274,7 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
       damage[i] = 1.0;
     }
   } else if (failureModel[itype].failure_johnson_cook) {
-    damage_increment += JohnsonCookDamageIncrement(pressure, stress_deviator, Lookup[FAILURE_JC_D1][itype],
+    damage_increment = JohnsonCookDamageIncrement(pressure, stress_deviator, Lookup[FAILURE_JC_D1][itype],
                                                    Lookup[FAILURE_JC_D2][itype], Lookup[FAILURE_JC_D3][itype], Lookup[FAILURE_JC_D4][itype],
                                                    Lookup[FAILURE_JC_EPDOT0][itype], eff_plastic_strain_rate[i], plastic_strain_increment);
     if (failureModel[itype].failure_coupling == true) {
@@ -2072,6 +2283,61 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
       damage_init[i] += damage_increment;
       if (damage_init[i] >= 1.0) damage[i] = 1.0;
     }
+  } else if (failureModel[itype].failure_gtn) {
+    /*
+     * Gurson - Tvergaard - Needleman damage evolution model:
+     */
+    //double vol_change_rate = Fdot[i].determinant();
+    //damage[i] += Lookup[GTN_AN][itype] * plastic_strain_increment + (1.0 - damage[i]) * vol_change_rate;
+
+    double hM = 0;
+    switch (strengthModel[itype]) {
+    case STRENGTH_LINEAR:
+      error->one(FLERR, "STRENGTH_LINEAR with GURSON_TVERGAARD_NEEDLEMAN failure is not supported.");
+      break;
+
+    case LINEAR_DEFGRAD:
+      error->one(FLERR, "LINEAR_DEFGRAD is only for debugging purposes and currently deactivated.");
+      break;
+
+    case STRENGTH_LINEAR_PLASTIC:
+      //yieldStress = Lookup[YIELD_STRESS][itype] + Lookup[HARDENING_PARAMETER][itype] * eff_plastic_strain[i];
+      hM = Lookup[HARDENING_PARAMETER][itype];
+      break;
+
+    case STRENGTH_LUDWICK_HOLLOMON:
+      //yieldStress = Lookup[LH_A][itype] + Lookup[LH_B][itype] * pow(eff_plastic_strain[i], Lookup[LH_n][itype]);
+      hM = Lookup[LH_B][itype] * Lookup[LH_n][itype] * pow(eff_plastic_strain[i], 1 - Lookup[LH_n][itype]);
+      break;
+
+    case STRENGTH_SWIFT:
+      //yieldStress = Lookup[SWIFT_A][itype] + Lookup[SWIFT_B][itype] * pow(eff_plastic_strain[i] + Lookup[SWIFT_eps0][itype], Lookup[SWIFT_n][itype]);
+      hM = Lookup[SWIFT_B][itype] * Lookup[SWIFT_n][itype] * pow(eff_plastic_strain[i] + Lookup[SWIFT_eps0][itype], 1 - Lookup[SWIFT_n][itype]);
+      break;
+
+    case STRENGTH_VOCE:
+      //yieldStress = Lookup[VOCE_A][itype] - Lookup[VOCE_Q1][itype] * exp(-Lookup[VOCE_n1][itype] * eff_plastic_strain[i])
+      //  - Lookup[VOCE_Q2][itype] * exp(Lookup[VOCE_n2][itype] * eff_plastic_strain[i]);
+      hM = Lookup[VOCE_Q1][itype] * Lookup[VOCE_n1][itype] * exp(-Lookup[VOCE_n1][itype] * eff_plastic_strain[i])
+        + Lookup[VOCE_Q2][itype] * Lookup[VOCE_n2][itype] * exp(Lookup[VOCE_n2][itype] * eff_plastic_strain[i]);
+      break;
+
+    case STRENGTH_JOHNSON_COOK:
+      error->one(FLERR, "JOHNSON_COOK strength with GURSON_TVERGAARD_NEEDLEMAN failure is not supported.");
+      break;
+
+    case STRENGTH_NONE:
+      break;
+
+    default:
+      error->one(FLERR, "unknown strength model.");
+      break;
+    }
+
+    double damage_increment;
+    damage_increment += GTNDamageIncrement(Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype], Lookup[GTN_AN][itype], Lookup[GTN_Komega][itype], pressure,
+             stress_deviator, stress, eff_plastic_strain[i], plastic_strain_increment, damage[i], Fdot[i], yieldstress, hM);
+    damage[i] += damage_increment;
   }
 
   damage[i] = MIN(damage[i], 1.0);
@@ -2209,7 +2475,7 @@ void PairTlsph::UpdateDegradation() {
       if (failureModel[itype].integration_point_wise) {
         degradation_ij[i][jj] = 1 - (1 - damage[i]) * (1 - damage[j]);
         if (degradation_ij[i][jj] >= 1.0) { // delete interaction if fully damaged
-          printf("Link between %d and %d destroyed due to complete degradation.\n", tag[i], partner[i][jj]);
+          printf("Link between %d and %d destroyed due to complete degradation with damage[i] = %f and damage[j] = %f.\n", tag[i], partner[i][jj], damage[i], damage[j]);
           degradation_ij[i][jj] = 1.0;
         }
         /*
