@@ -2436,9 +2436,9 @@ void PairTlsph::ComputeDamage(const int i, const Matrix3d& strain, const Matrix3
     damage_increment += GTNDamageIncrement(Lookup[GTN_Q1][itype], Lookup[GTN_Q2][itype], Lookup[GTN_AN][itype], Lookup[GTN_Komega][itype], pressure,
              stress_deviator, stress, eff_plastic_strain[i], plastic_strain_increment, damage[i], Fdot[i], yieldstress, hM);
     damage[i] += damage_increment;
-    if (atom->tag[i] == 570) {
-      std::cout << "damage[" << atom->tag[i] << "] = " << damage[i] << "\t" << "damage_increment = " << damage_increment << std::endl;
-    }
+    // if (atom->tag[i] == 570) {
+    //   std::cout << "damage[" << atom->tag[i] << "] = " << damage[i] << "\t" << "damage_increment = " << damage_increment << std::endl;
+    // }
   }
 
   damage[i] = MIN(damage[i], 1.0);
