@@ -154,8 +154,8 @@ static inline double TestMatricesEqual(Eigen::Matrix3d A, Eigen::Matrix3d B, dou
  * Calculate the trace of the product of two matrices
  */
 
-static inline double TraceProductSymmetricalMatrices(Matrix3d A, Matrix3d B){
-  Vector3d Av1, Av2, Bv1, Bv2;
+static inline double TraceProductSymmetricalMatrices(Eigen::Matrix3d A, Eigen::Matrix3d B){
+  Eigen::Vector3d Av1, Av2, Bv1, Bv2;
   Av1(0) = A(0, 0);
   Av1(1) = A(1, 1);
   Av1(2) = A(2, 2);
