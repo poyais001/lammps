@@ -416,7 +416,7 @@ double GTNStrength(const double G, const double An, const double Q1, const doubl
   if (coupling == true) Gd *= (1-damage);
   double x = 1.0;
   double damage_increment = 0.0;
-  double Q2triaxx;
+  double Q2triaxx, triax;
   
   /*
    * deviatoric rate of unrotated stress
@@ -445,9 +445,9 @@ double GTNStrength(const double G, const double An, const double Q1, const doubl
      */
     
     // determine stress triaxiality
-    double triax = 0.0;
+    triax = 0.0;
     if (p != 0.0 && J2 != 0.0) {
-      triax = -p / (J2 + 0.01 * fabs(p)); // have softening in denominator to avoid divison by zero
+      triax = p / (J2 + 0.01 * fabs(p)); // have softening in denominator to avoid divison by zero
     }
     double Q2triax = 1.5 * Q2 * triax;
     double Q1fQ2triax = Q1f * Q2triax;
@@ -529,9 +529,9 @@ double GTNStrength(const double G, const double An, const double Q1, const doubl
       
       fs_increment = lambda_increment * f * inverse_sM * ((1 - f) * 3 * Q1 * Q2 * sinh(Q2triaxx) + Komega * omega * 2 * x);
 
-      if (tag == 2151) {
-        printf("lambda_increment = %10.e, fs_increment = %10.e, f = %10.e\n", lambda_increment, fs_increment, f);
-      }
+      //if (tag == 2151) {
+      //printf("lambda_increment = %10.e, fs_increment = %10.e, f = %10.e, Q2triaxx = %10.e, triax = %10.e, x = %10.e\n", lambda_increment, fs_increment, f, Q2triaxx, triax, x);
+      //}
       
       if (isnan(fs_increment) || isnan(-fs_increment)) {
         printf("GTN f increment: %10.e\n", fs_increment);
